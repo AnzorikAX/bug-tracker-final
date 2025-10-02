@@ -1,104 +1,75 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
-
-export type NotificationType =
-  | "task_created"
-  | "task_updated"
-  | "task_deleted"
-  | "task_assigned"
-  | "task_completed"
-  | "task_due_soon";
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
 
 export type Notification = {
-  id: number;
-  type: NotificationType;
-  title: string;
+  id: string;
   message: string;
-  createdAt: Date;
-  read: boolean;        // 🔹 добавляем поле для статуса прочитанности
-  timestamp: string;    // 🔹 строка для отображения времени
+  type?: "task" | "system" | "admin";
+  read: boolean;
+  timestamp: number;
 };
 
 type NotificationsContextType = {
   notifications: Notification[];
-  addNotification: (
-    type: NotificationType,
-    data: { title: string; message: string }
-  ) => void;
-  removeNotification: (id: number) => void;
-  clearNotifications: () => void;
-
-  // 🔹 добавляем методы для совместимости с NotificationsBell
-  markAsRead: (id: number) => void;
-  markAllAsRead: () => void;
   unreadCount: number;
+  addNotification: (message: string, type?: "task" | "system" | "admin") => void;
+  markAsRead: (id: string) => void;
+  markAllAsRead: () => void;
 };
 
-const NotificationsContext = createContext<NotificationsContextType | undefined>(
-  undefined
-);
+const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
-export function NotificationsProvider({ children }: { children: ReactNode }) {
+export const NotificationsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const addNotification = (
-    type: NotificationType,
-    data: { title: string; message: string }
-  ) => {
-    const newNotification: Notification = {
-      id: Date.now(),
+  // Загружаем уведомления из localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("notifications");
+    if (saved) {
+      setNotifications(JSON.parse(saved));
+    }
+  }, []);
+
+  // Сохраняем при изменении
+  useEffect(() => {
+    localStorage.setItem("notifications", JSON.stringify(notifications));
+  }, [notifications]);
+
+  const addNotification = useCallback((message: string, type: "task" | "system" | "admin" = "system") => {
+    const newNotif: Notification = {
+      id: Date.now().toString(),
+      message,
       type,
-      title: data.title,
-      message: data.message,
-      createdAt: new Date(),
       read: false,
-      timestamp: new Date().toLocaleString(), // удобный формат для отображения
+      timestamp: Date.now(),
     };
-    setNotifications((prev) => [...prev, newNotification]);
-  };
+    setNotifications((prev) => [newNotif, ...prev]);
+  }, []);
 
-  const removeNotification = (id: number) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id));
-  };
-
-  const clearNotifications = () => {
-    setNotifications([]);
-  };
-
-  const markAsRead = (id: number) => {
+  const markAsRead = useCallback((id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
-  };
+  }, []);
 
-  const markAllAsRead = () => {
+  const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <NotificationsContext.Provider
-      value={{
-        notifications,
-        addNotification,
-        removeNotification,
-        clearNotifications,
-        markAsRead,
-        markAllAsRead,
-        unreadCount,
-      }}
+      value={{ notifications, unreadCount, addNotification, markAsRead, markAllAsRead }}
     >
       {children}
     </NotificationsContext.Provider>
   );
-}
+};
 
-export function useNotifications() {
-  const context = useContext(NotificationsContext);
-  if (!context) {
-    throw new Error("useNotifications must be used within NotificationsProvider");
-  }
-  return context;
-}
+export const useNotifications = () => {
+  const ctx = useContext(NotificationsContext);
+  if (!ctx) throw new Error("useNotifications must be used inside NotificationsProvider");
+  return ctx;
+};

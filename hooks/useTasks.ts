@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useNotifications } from "./useNotifications";
 
-// Тип задачи
 export type Task = {
   id: number;
   title: string;
@@ -11,118 +10,73 @@ export type Task = {
   status: "todo" | "inprogress" | "done";
   priority: "low" | "medium" | "high";
   assignee: string;
-  createdBy: number;
   createdAt: Date;
   updatedAt: Date;
+  createdBy?: number;
 };
 
-// Хук для управления задачами
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const { addNotification } = useNotifications();
 
-  // Создание задачи
+  // ✅ Создание задачи
   const createTask = (
-    taskData: Omit<Task, "id" | "createdAt" | "updatedAt" | "createdBy">,
+    taskData: Omit<Task, "id" | "createdAt" | "updatedAt">,
     userId: number
   ) => {
     const newTask: Task = {
-      id: Date.now(),
       ...taskData,
-      createdBy: userId,
+      id: Date.now(),
       createdAt: new Date(),
       updatedAt: new Date(),
+      createdBy: userId,
     };
+
     setTasks((prev) => [...prev, newTask]);
 
-    addNotification("task_created", {
-      title: "Задача создана",
-      message: `Новая задача "${newTask.title}" успешно добавлена.`,
-    });
+    // 🟢 Добавляем уведомление
+    addNotification(`Создана новая задача: ${taskData.title}`, "task");
   };
 
-  // Обновление задачи
-  const updateTask = (taskId: number, updatedFields: Partial<Task>) => {
+  // ✅ Обновление задачи
+  const updateTask = (id: number, updatedFields: Partial<Task>) => {
     setTasks((prev) =>
       prev.map((task) =>
-        task.id === taskId ? { ...task, ...updatedFields, updatedAt: new Date() } : task
+        task.id === id ? { ...task, ...updatedFields, updatedAt: new Date() } : task
       )
     );
 
-    addNotification("task_updated", {
-      title: "Задача обновлена",
-      message: `Задача #${taskId} обновлена.`,
-    });
+    const updatedTask = tasks.find((t) => t.id === id);
+    if (updatedTask) {
+      addNotification(`Задача обновлена: ${updatedTask.title}`, "task");
+    }
   };
 
-  // Завершение задачи
-  const completeTask = (taskId: number) => {
+  // ✅ Удаление задачи
+  const deleteTask = (id: number) => {
+    const deletedTask = tasks.find((t) => t.id === id);
+    setTasks((prev) => prev.filter((task) => task.id !== id));
+
+    if (deletedTask) {
+      addNotification(`Задача удалена: ${deletedTask.title}`, "task");
+    }
+  };
+
+  // ✅ Перемещение задачи (Kanban drag-n-drop)
+  const moveTask = (id: number, newStatus: Task["status"]) => {
     setTasks((prev) =>
       prev.map((task) =>
-        task.id === taskId ? { ...task, status: "done", updatedAt: new Date() } : task
+        task.id === id ? { ...task, status: newStatus, updatedAt: new Date() } : task
       )
     );
 
-    addNotification("task_completed", {
-      title: "Задача завершена",
-      message: `Задача #${taskId} отмечена как выполненная.`,
-    });
+    const movedTask = tasks.find((t) => t.id === id);
+    if (movedTask) {
+      addNotification(`Задача перемещена: ${movedTask.title}`, "task");
+    }
   };
 
-  // Удаление задачи
-  const deleteTask = (taskId: number) => {
-    setTasks((prev) => prev.filter((task) => task.id !== taskId));
-
-    addNotification("task_deleted", {
-      title: "Задача удалена",
-      message: `Задача #${taskId} удалена.`,
-    });
-  };
-
-  // Перемещение задачи (Drag & Drop)
-  const moveTask = (taskId: number, newStatus: "todo" | "inprogress" | "done") => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === taskId ? { ...task, status: newStatus, updatedAt: new Date() } : task
-      )
-    );
-
-    addNotification("task_updated", {
-      title: "Статус изменён",
-      message: `Задача #${taskId} перемещена в ${newStatus}.`,
-    });
-  };
-
-  // --- Фильтрация задач ---
-  function getFilteredTasks(
-    filters: {
-      query?: string;
-      status?: string;
-      priority?: string;
-      assignee?: string;
-    },
-    tasks: Task[]
-  ): Task[] {
-    return tasks.filter((task) => {
-      const matchesQuery =
-        !filters.query ||
-        task.title.toLowerCase().includes(filters.query.toLowerCase()) ||
-        task.description.toLowerCase().includes(filters.query.toLowerCase());
-
-      const matchesStatus =
-        !filters.status || filters.status === "all" || task.status === filters.status;
-
-      const matchesPriority =
-        !filters.priority || filters.priority === "all" || task.priority === filters.priority;
-
-      const matchesAssignee =
-        !filters.assignee || filters.assignee === "all" || task.assignee === filters.assignee;
-
-      return matchesQuery && matchesStatus && matchesPriority && matchesAssignee;
-    });
-  }
-
-  // --- Статистика ---
+  // ✅ Статистика
   const getStats = () => {
     return {
       total: tasks.length,
@@ -132,31 +86,59 @@ export function useTasks() {
     };
   };
 
-  const getUserTasks = (userId: number) => {
-    return tasks.filter((t) => t.createdBy === userId);
+  // ✅ Фильтрация задач
+  const getFilteredTasks = (
+    filters: { query?: string; priority?: string; status?: string; assignee?: string },
+    sourceTasks: Task[] = tasks
+  ) => {
+    return sourceTasks.filter((task) => {
+      const matchesQuery = filters.query
+        ? task.title.toLowerCase().includes(filters.query.toLowerCase()) ||
+          task.description.toLowerCase().includes(filters.query.toLowerCase())
+        : true;
+
+      const matchesPriority =
+        filters.priority && filters.priority !== "all"
+          ? task.priority === filters.priority
+          : true;
+
+      const matchesStatus =
+        filters.status && filters.status !== "all"
+          ? task.status === filters.status
+          : true;
+
+      const matchesAssignee =
+        filters.assignee && filters.assignee !== "all"
+          ? task.assignee === filters.assignee
+          : true;
+
+      return matchesQuery && matchesPriority && matchesStatus && matchesAssignee;
+    });
   };
 
+  // ✅ Задачи конкретного пользователя
+  const getUserTasks = (userId: number) => {
+    return tasks.filter((t) => t.createdBy === userId || t.assignee === String(userId));
+  };
+
+  // ✅ Статистика конкретного пользователя
   const getUserStats = (userId: number) => {
     const userTasks = getUserTasks(userId);
     return {
       total: userTasks.length,
-      todo: userTasks.filter((t) => t.status === "todo").length,
-      inprogress: userTasks.filter((t) => t.status === "inprogress").length,
       done: userTasks.filter((t) => t.status === "done").length,
     };
   };
 
-  // Возвращаем наружу
   return {
     tasks,
     createTask,
     updateTask,
-    completeTask,
     deleteTask,
     moveTask,
     getStats,
+    getFilteredTasks,
     getUserTasks,
     getUserStats,
-    getFilteredTasks, // 🔹 теперь доступна
   };
 }
