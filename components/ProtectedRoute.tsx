@@ -1,34 +1,55 @@
-'use client';
+"use client";
 
-import { useAuth } from '../hooks/useAuth';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import LoadingSpinner from './LoadingSpinner';
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+  const { user, isLoading } = useAuth(); // ← УБРАЛ checkAuth из зависимостей
   const router = useRouter();
+  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    // Ждем завершения загрузки перед проверкой авторизации
-    if (!isLoading) {
-      if (!isAuthenticated) {
+    // 🔥 ИСПРАВЛЕНИЕ: Проверяем только один раз при монтировании
+    if (!hasChecked && !isLoading) {
+      if (!user) {
+        console.log('🔐 ProtectedRoute: User not authenticated, redirecting to login...');
         router.push('/auth/login');
       }
+      setHasChecked(true);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [user, isLoading, hasChecked, router]);
 
-  // Показываем загрузку во время проверки авторизации
-  if (isLoading) {
+  // Показываем загрузку во время первоначальной проверки
+  if (isLoading || !hasChecked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Проверка авторизации...</p>
-        </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingSpinner 
+          size="lg" 
+          text="Проверка авторизации..." 
+        />
       </div>
     );
   }
 
-  // Показываем детей только если авторизован
-  return isAuthenticated ? <>{children}</> : null;
+  // Если пользователь авторизован - показываем детей
+  if (user) {
+    console.log('🔐 ProtectedRoute: User authenticated, showing content:', user.email);
+    return <>{children}</>;
+  }
+
+  // Если не авторизован - показываем загрузку (будет редирект)
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <LoadingSpinner 
+        size="lg" 
+        text="Перенаправление на страницу входа..." 
+      />
+    </div>
+  );
 }

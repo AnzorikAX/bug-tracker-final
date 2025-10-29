@@ -1,27 +1,40 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import { AuthProvider } from '../hooks/useAuth';
-import { NotificationsProvider } from '../hooks/useNotifications';
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import { AuthProvider } from "../hooks/useAuth";
+import { NotificationsProvider } from "../hooks/useNotifications";
+import { ToastProvider } from "../components/ToastProvider";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: 'Bug Tracker - Система отслеживания ошибок',
-  description: 'Профессиональная система для управления задачами и ошибками',
+  title: "Bug Tracker",
+  description: "Система отслеживания ошибок и задач",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="ru">
-      <body className={inter.className}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         <AuthProvider>
           <NotificationsProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </NotificationsProvider>
         </AuthProvider>
       </body>

@@ -1,48 +1,38 @@
-'use client';
+"use client"; // ← ДОБАВЬ ЭТУ СТРОКУ В САМОМ ВЕРХУ
 
 import { useState } from 'react';
-import { useAuth } from '../../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../../hooks/useAuth';
 import Link from 'next/link';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    name: '',
-    password: '',
-    confirmPassword: ''
-  });
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { register, isAuthenticated } = useAuth();
+
+  const { register, user } = useAuth();
   const router = useRouter();
 
-  // Если уже авторизован, перенаправляем на главную
-  if (isAuthenticated) {
+  // Если пользователь уже авторизован - редирект на главную
+  if (user) {
     router.push('/');
     return null;
   }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     // Валидация
-    if (formData.password !== formData.confirmPassword) {
+    if (password !== confirmPassword) {
       setError('Пароли не совпадают');
       return;
     }
 
-    if (formData.password.length < 6) {
+    if (password.length < 6) {
       setError('Пароль должен быть не менее 6 символов');
       return;
     }
@@ -50,145 +40,119 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      const success = await register({
-        username: formData.username,
-        email: formData.email,
-        name: formData.name,
-        password: formData.password,
-        role: 'user'
-      });
-
-      if (success) {
+      const result = await register(email, name, password);
+      
+      if (result.success) {
         router.push('/');
       } else {
-        setError('Пользователь с таким username или email уже существует');
+        setError(result.error || 'Ошибка регистрации');
       }
-    } catch (err) {
-      setError('Произошла ошибка при регистрации');
+    } catch (err: any) {
+      setError(err.message || 'Ошибка регистрации');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">
-              🐛 Bug Tracker
-            </h1>
-            <p className="text-gray-600">Создайте новую учетную запись</p>
-          </div>
-
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Регистрация в Bug Tracker
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Или{' '}
+            <Link href="/auth/login" className="font-medium text-blue-600 hover:text-blue-500">
+              войдите в существующий аккаунт
+            </Link>
+          </p>
+        </div>
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center">
-                <span className="text-red-600 mr-2">⚠️</span>
-                <span className="text-red-800">{error}</span>
-              </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Полное имя
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                Имя
               </label>
               <input
                 id="name"
                 name="name"
                 type="text"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Введите ваше имя"
                 required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Ваше имя"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
             </div>
 
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                Имя пользователя
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                value={formData.username}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Придумайте username"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                 Email
               </label>
               <input
                 id="email"
                 name="email"
                 type="email"
-                value={formData.email}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="your@email.com"
+                autoComplete="email"
                 required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Пароль
               </label>
               <input
                 id="password"
                 name="password"
                 type="password"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Не менее 6 символов"
                 required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Пароль (минимум 6 символов)"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
             <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                 Подтверждение пароля
               </label>
               <input
                 id="confirmPassword"
                 name="confirmPassword"
                 type="password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Повторите пароль"
                 required
+                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Повторите пароль"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
+          </div>
 
+          <div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium mt-4"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
             </button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Уже есть аккаунт?{' '}
-              <Link href="/auth/login" className="text-blue-500 hover:text-blue-600 font-medium">
-                Войти
-              </Link>
-            </p>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

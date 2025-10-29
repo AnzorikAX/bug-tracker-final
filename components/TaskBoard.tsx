@@ -4,9 +4,11 @@ import { useState, useMemo } from 'react';
 import TaskModal from './TaskModal';
 import EditTaskModal from './EditTaskModal';
 import SearchBar from './SearchBar';
+import LoadingSpinner from './LoadingSpinner'; // ← ДОБАВЛЕНО: Импорт компонента загрузки
 import { useTasks, type Task } from '../hooks/useTasks';
 import { useAuth } from '../hooks/useAuth';
-import { useNotifications } from '../hooks/useNotifications'; // 🔹 добавлено
+import { useNotifications } from '../hooks/useNotifications';
+import { useToast } from './ToastProvider';
 
 type StatusType = 'todo' | 'inprogress' | 'done';
 
@@ -32,6 +34,12 @@ export default function TaskBoard() {
 
   const [taskFilter, setTaskFilter] = useState<'all' | 'my'>('all');
 
+  // ДОБАВЛЕНО: Состояния загрузки для разных операций
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
+
   const {
     tasks,
     createTask,
@@ -42,10 +50,12 @@ export default function TaskBoard() {
     getFilteredTasks,
     getUserTasks,
     getUserStats,
+    getDeadlineStatus,
   } = useTasks();
 
   const { user } = useAuth();
-  const { addNotification } = useNotifications(); // 🔹 уведомления
+  const { addNotification } = useNotifications();
+  const { addToast } = useToast();
 
   // Базовые задачи (все или только мои)
   const baseTasks = useMemo(() => {
@@ -72,25 +82,43 @@ export default function TaskBoard() {
     { id: 'done', title: '✅ Выполнено', color: 'bg-green-100' },
   ];
 
-  // --- Обработчики с уведомлениями ---
-  const handleTaskCreate = (
+  // --- Обработчики с уведомлениями, toast и индикаторами загрузки ← ОБНОВЛЕНО ---
+  const handleTaskCreate = async (
     taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
   ) => {
     if (user) {
-      createTask(taskData, user.id);
-      addNotification('task_created', {
-        title: 'Задача создана',
-        message: `Новая задача "${taskData.title}" успешно добавлена.`,
-      });
+      setIsCreating(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
+      try {
+        // Имитируем задержку для демонстрации индикатора загрузки
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        createTask(taskData, user.id);
+        addNotification(`Создана новая задача: "${taskData.title}"`, 'task');
+        addToast(`Задача "${taskData.title}" успешно создана!`, 'success');
+      } catch (error) {
+        addToast('Ошибка при создании задачи', 'error');
+        console.error('Error creating task:', error);
+      } finally {
+        setIsCreating(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
+      }
     }
   };
 
-  const handleTaskUpdate = (updatedTask: Task) => {
-    updateTask(updatedTask.id, updatedTask);
-    addNotification('task_updated', {
-      title: 'Задача обновлена',
-      message: `Задача "${updatedTask.title}" обновлена.`,
-    });
+  const handleTaskUpdate = async (updatedTask: Task) => {
+    setIsUpdating(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
+    try {
+      // Имитируем задержку для демонстрации индикатора загрузки
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      updateTask(updatedTask.id, updatedTask);
+      addNotification(`Задача обновлена: "${updatedTask.title}"`, 'task');
+      addToast(`Задача "${updatedTask.title}" успешно обновлена!`, 'success');
+    } catch (error) {
+      addToast('Ошибка при обновлении задачи', 'error');
+      console.error('Error updating task:', error);
+    } finally {
+      setIsUpdating(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
+    }
   };
 
   const openEditModal = (task: Task) => {
@@ -98,13 +126,25 @@ export default function TaskBoard() {
     setIsEditModalOpen(true);
   };
 
-  const handleDeleteTask = (taskId: number) => {
+  const handleDeleteTask = async (taskId: number) => {
+    const taskToDelete = tasks.find(t => t.id === taskId);
     if (confirm('Вы уверены, что хотите удалить эту задачу?')) {
-      deleteTask(taskId);
-      addNotification('task_deleted', {
-        title: 'Задача удалена',
-        message: `Задача #${taskId} была удалена.`,
-      });
+      setIsDeleting(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
+      try {
+        // Имитируем задержку для демонстрации индикатора загрузки
+        await new Promise(resolve => setTimeout(resolve, 600));
+        
+        deleteTask(taskId);
+        addNotification(`Задача #${taskId} была удалена`, 'task');
+        if (taskToDelete) {
+          addToast(`Задача "${taskToDelete.title}" удалена`, 'info');
+        }
+      } catch (error) {
+        addToast('Ошибка при удалении задачи', 'error');
+        console.error('Error deleting task:', error);
+      } finally {
+        setIsDeleting(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
+      }
     }
   };
 
@@ -121,7 +161,7 @@ export default function TaskBoard() {
     });
   };
 
-  // Drag & Drop
+  // Drag & Drop с toast-уведомлениями и индикатором загрузки ← ОБНОВЛЕНО
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     setDraggedTask(task);
     e.dataTransfer.effectAllowed = 'move';
@@ -132,15 +172,27 @@ export default function TaskBoard() {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, status: StatusType) => {
+  const handleDrop = async (e: React.DragEvent, status: StatusType) => {
     e.preventDefault();
     if (draggedTask) {
-      moveTask(draggedTask.id, status);
-      addNotification('task_updated', {
-        title: 'Статус изменён',
-        message: `Задача "${draggedTask.title}" перемещена в ${status}.`,
-      });
-      setDraggedTask(null);
+      setIsMoving(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
+      try {
+        // Имитируем небольшую задержку для лучшего UX
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        moveTask(draggedTask.id, status);
+        addNotification(`Задача "${draggedTask.title}" перемещена`, 'task');
+        
+        const statusText = status === 'todo' ? 'к выполнению' : 
+                          status === 'inprogress' ? 'в работу' : 'выполнено';
+        addToast(`Задача "${draggedTask.title}" перемещена ${statusText}`, 'info');
+      } catch (error) {
+        addToast('Ошибка при перемещении задачи', 'error');
+        console.error('Error moving task:', error);
+      } finally {
+        setIsMoving(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
+        setDraggedTask(null);
+      }
     }
   };
 
@@ -157,6 +209,46 @@ export default function TaskBoard() {
     }
   };
 
+  // Функция для получения цвета дедлайна
+  const getDeadlineColor = (task: Task) => {
+    const status = getDeadlineStatus(task);
+    switch (status) {
+      case 'danger':
+        return 'text-red-600 bg-red-100 border-red-200';
+      case 'warning':
+        return 'text-orange-600 bg-orange-100 border-orange-200';
+      case 'normal':
+        return 'text-green-600 bg-green-100 border-green-200';
+      case 'completed':
+        return 'text-gray-500 bg-gray-100 border-gray-200';
+      default:
+        return 'text-gray-500 bg-gray-100 border-gray-200';
+    }
+  };
+
+  // Функция для получения иконки дедлайна
+  const getDeadlineIcon = (task: Task) => {
+    const status = getDeadlineStatus(task);
+    switch (status) {
+      case 'danger':
+        return '⏰'; // Просрочено
+      case 'warning':
+        return '⚠️'; // Скоро дедлайн
+      case 'normal':
+        return '📅'; // Все ок
+      case 'completed':
+        return '✅'; // Выполнено
+      default:
+        return '📅';
+    }
+  };
+
+  // Функция для форматирования даты
+  const formatDeadline = (deadline: Date | null) => {
+    if (!deadline) return 'Не установлен';
+    return new Date(deadline).toLocaleDateString('ru-RU');
+  };
+
   const stats = getStats();
   const userStats = user ? getUserStats(user.id) : null;
   const filteredStats = {
@@ -166,15 +258,18 @@ export default function TaskBoard() {
     done: filteredTasks.filter((t) => t.status === 'done').length,
   };
 
+  // ДОБАВЛЕНО: Общий индикатор загрузки для операций
+  const isLoading = isCreating || isUpdating || isDeleting || isMoving;
+
   return (
     <div className="p-6">
       {/* Модалки */}
       <TaskModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onTaskCreate={handleTaskCreate}
-        currentUser={user || { id: 0, name: 'Пользователь' }}
-      />
+  isOpen={isModalOpen}
+  onClose={() => setIsModalOpen(false)}
+  onTaskCreate={handleTaskCreate}
+  currentUser={user || { id: '0', name: 'Пользователь' }} // ← ИСПРАВИТЬ: id: '0' вместо 0
+/>
 
       <EditTaskModal
         isOpen={isEditModalOpen}
@@ -182,6 +277,21 @@ export default function TaskBoard() {
         onTaskUpdate={handleTaskUpdate}
         task={editingTask}
       />
+
+      {/* Индикатор загрузки для операций ← ДОБАВЛЕНО */}
+      {isLoading && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm">
+              {isCreating && 'Создание задачи...'}
+              {isUpdating && 'Обновление задачи...'}
+              {isDeleting && 'Удаление задачи...'}
+              {isMoving && 'Перемещение задачи...'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Поиск и фильтры */}
       <SearchBar onSearch={handleSearch} onFilterChange={handleFilterChange} />
@@ -212,6 +322,7 @@ export default function TaskBoard() {
                   ? 'bg-white text-gray-800 shadow-sm'
                   : 'text-gray-600 hover:text-gray-800'
               }`}
+              disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
             >
               Все задачи
             </button>
@@ -222,6 +333,7 @@ export default function TaskBoard() {
                   ? 'bg-white text-gray-800 shadow-sm'
                   : 'text-gray-600 hover:text-gray-800'
               }`}
+              disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
             >
               Мои задачи
             </button>
@@ -229,9 +341,11 @@ export default function TaskBoard() {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
           >
-            + Новая задача
+            <span>+</span>
+            <span>Создать задачу</span>
           </button>
         </div>
       </div>
@@ -258,11 +372,13 @@ export default function TaskBoard() {
                 .map((task) => (
                   <div
                     key={task.id}
-                    draggable
+                    draggable={!isLoading} // ← ДОБАВЛЕНО: Блокируем drag при загрузке
                     onDragStart={(e) => handleDragStart(e, task)}
                     className={`bg-white p-4 rounded-lg shadow-sm border-l-4 ${getPriorityColor(
                       task.priority
-                    )} cursor-move hover:shadow-md transition-shadow`}
+                    )} cursor-move hover:shadow-md transition-shadow ${
+                      isLoading ? 'opacity-50 cursor-not-allowed' : '' // ← ДОБАВЛЕНО: Затемняем при загрузке
+                    }`}
                   >
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-medium text-gray-800">{task.title}</h4>
@@ -285,6 +401,18 @@ export default function TaskBoard() {
 
                     <p className="text-sm text-gray-600 mb-3">{task.description}</p>
 
+                    {/* Блок с дедлайном */}
+                    {task.deadline && (
+                      <div className={`mb-3 px-2 py-1 rounded text-xs border ${getDeadlineColor(task)}`}>
+                        <span className="mr-1">{getDeadlineIcon(task)}</span>
+                        <span className="font-medium">Дедлайн:</span>
+                        <span className="ml-1">{formatDeadline(task.deadline)}</span>
+                        {getDeadlineStatus(task) === 'danger' && task.status !== 'done' && (
+                          <span className="ml-1 font-bold">(ПРОСРОЧЕНО!)</span>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center text-xs text-gray-500">
                       <div>
                         <span>👤 {task.assignee}</span>
@@ -297,13 +425,15 @@ export default function TaskBoard() {
                       <div className="flex space-x-2">
                         <button
                           onClick={() => openEditModal(task)}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
                         >
                           ✏️
                         </button>
                         <button
                           onClick={() => handleDeleteTask(task.id)}
-                          className="text-red-600 hover:text-red-800"
+                          className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                          disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
                         >
                           🗑️
                         </button>

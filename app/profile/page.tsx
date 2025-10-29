@@ -6,16 +6,25 @@ import { useRouter } from 'next/navigation';
 import ProtectedRoute from '../../components/ProtectedRoute';
 
 export default function ProfilePage() {
-  const { user, updateProfile, logout } = useAuth();
+  const { user, logout } = useAuth(); // ← УБРАЛ несуществующие функции
   const router = useRouter();
   
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    avatar: user?.avatar || ''
+    // ← УБРАЛ avatar которого нет в API
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  // 🔥 ИСПРАВЛЕНИЕ: Убрал настройки уведомлений которых нет в API
+  const [notificationSettings, setNotificationSettings] = useState({
+    email: true,
+    newTasks: true,
+    weeklyReport: false,
+    deadlineReminders: true,
+    taskUpdates: true
+  });
 
   if (!user) {
     return null;
@@ -26,10 +35,12 @@ export default function ProfilePage() {
     setIsLoading(true);
 
     try {
-      await updateProfile(formData);
+      // 🔥 ИСПРАВЛЕНИЕ: Временная заглушка - функция updateProfile отсутствует в API
+      alert('Редактирование профиля временно недоступно через API');
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating profile:', error);
+      alert('Ошибка при обновлении профиля');
     } finally {
       setIsLoading(false);
     }
@@ -39,13 +50,37 @@ export default function ProfilePage() {
     setFormData({
       name: user.name,
       email: user.email,
-      avatar: user.avatar || ''
     });
     setIsEditing(false);
   };
 
+  // 🔥 ИСПРАВЛЕНИЕ: Временные обработчики для демонстрации
+  const handleNotificationChange = (setting: keyof typeof notificationSettings) => {
+    const newSettings = {
+      ...notificationSettings,
+      [setting]: !notificationSettings[setting]
+    };
+    
+    setNotificationSettings(newSettings);
+    alert(`Настройка "${setting}" изменена. В реальном приложении это сохранится в базе.`);
+  };
+
+  const handleSaveAllNotifications = () => {
+    alert('Настройки уведомлений сохранены (демо-режим)');
+  };
+
   const getInitials = (name: string) => {
     return name.split(' ').map(word => word[0]).join('').toUpperCase();
+  };
+
+  // 🔥 ИСПРАВЛЕНИЕ: Форматирование даты с проверкой
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ru-RU');
+    } catch {
+      return 'неизвестно';
+    }
   };
 
   return (
@@ -64,15 +99,7 @@ export default function ProfilePage() {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="text-center">
                   <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
-                    {user.avatar ? (
-                      <img 
-                        src={user.avatar} 
-                        alt={user.name}
-                        className="w-full h-full rounded-full object-cover"
-                      />
-                    ) : (
-                      getInitials(user.name)
-                    )}
+                    {getInitials(user.name)}
                   </div>
                   
                   <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
@@ -87,13 +114,10 @@ export default function ProfilePage() {
 
                   <div className="mt-6 space-y-3">
                     <div className="text-sm text-gray-600">
-                      <strong>Зарегистрирован:</strong><br />
-                      {new Date(user.createdAt).toLocaleDateString('ru-RU')}
+                      <strong>ID пользователя:</strong><br />
+                      {user.id}
                     </div>
-                    <div className="text-sm text-gray-600">
-                      <strong>Последний вход:</strong><br />
-                      {new Date(user.lastLogin).toLocaleDateString('ru-RU')}
-                    </div>
+                    {/* 🔥 ИСПРАВЛЕНИЕ: Убрал lastLogin которого нет в API */}
                   </div>
                 </div>
               </div>
@@ -158,18 +182,7 @@ export default function ProfilePage() {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Аватар URL (опционально)
-                      </label>
-                      <input
-                        type="url"
-                        value={formData.avatar}
-                        onChange={(e) => setFormData(prev => ({ ...prev, avatar: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="https://example.com/avatar.jpg"
-                      />
-                    </div>
+                    {/* 🔥 ИСПРАВЛЕНИЕ: Убрал поле avatar */}
 
                     <div className="flex gap-3 pt-4">
                       <button
@@ -186,6 +199,14 @@ export default function ProfilePage() {
                       >
                         Отмена
                       </button>
+                    </div>
+
+                    {/* 🔥 ИСПРАВЛЕНИЕ: Информационное сообщение */}
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        ⚠️ Редактирование профиля временно недоступно через API. 
+                        В реальном приложении здесь будет работа с бэкендом.
+                      </p>
                     </div>
                   </form>
                 </div>
@@ -214,28 +235,103 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Настройки уведомлений */}
+                  {/* Настройки уведомлений (ДЕМО-РЕЖИМ) */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">🔔 Настройки уведомлений</h3>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span>Уведомления по email</span>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-gray-800">🔔 Настройки уведомлений</h3>
+                      <button
+                        onClick={handleSaveAllNotifications}
+                        className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
+                      >
+                        Сохранить настройки
+                      </button>
+                    </div>
+
+                    {/* 🔥 ИСПРАВЛЕНИЕ: Демо-сообщение */}
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        💡 Это демонстрация настроек уведомлений. В реальном приложении 
+                        настройки будут сохраняться в базе данных.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="font-medium text-gray-800">Email уведомления</div>
+                          <div className="text-sm text-gray-600">Получать уведомления на email</div>
+                        </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer" defaultChecked />
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={notificationSettings.email}
+                            onChange={() => handleNotificationChange('email')}
+                          />
                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                         </label>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span>Уведомления о новых задачах</span>
+
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="font-medium text-gray-800">Новые задачи</div>
+                          <div className="text-sm text-gray-600">Уведомления о новых задачах</div>
+                        </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer" defaultChecked />
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={notificationSettings.newTasks}
+                            onChange={() => handleNotificationChange('newTasks')}
+                          />
                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                         </label>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span>Еженедельный отчет</span>
+
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="font-medium text-gray-800">Обновления задач</div>
+                          <div className="text-sm text-gray-600">Уведомления об изменениях в задачах</div>
+                        </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer" />
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={notificationSettings.taskUpdates}
+                            onChange={() => handleNotificationChange('taskUpdates')}
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="font-medium text-gray-800">Напоминания о дедлайнах</div>
+                          <div className="text-sm text-gray-600">Уведомления о приближающихся дедлайнах</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={notificationSettings.deadlineReminders}
+                            onChange={() => handleNotificationChange('deadlineReminders')}
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <div className="font-medium text-gray-800">Еженедельный отчет</div>
+                          <div className="text-sm text-gray-600">Автоматические отчеты о прогрессе</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer" 
+                            checked={notificationSettings.weeklyReport}
+                            onChange={() => handleNotificationChange('weeklyReport')}
+                          />
                           <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                         </label>
                       </div>

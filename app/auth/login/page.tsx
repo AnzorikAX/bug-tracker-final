@@ -1,45 +1,34 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '../../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../../hooks/useAuth';
 import Link from 'next/link';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+
+  const { login, user } = useAuth();
   const router = useRouter();
 
-  // Перенаправляем если уже авторизован
+  // 🔥 ИСПРАВЛЕНИЕ: Используем useEffect для редиректа
   useEffect(() => {
-    if (isAuthenticated && !authLoading) {
+    if (user) {
+      console.log('🔄 User is authenticated, redirecting...');
       router.push('/');
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [user, router]);
 
-  // Показываем загрузку во время проверки авторизации
-  if (authLoading) {
+  // Если пользователь авторизован, показываем загрузку вместо формы
+  if (user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Проверка авторизации...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Если уже авторизован, показываем загрузку (useEffect перенаправит)
-  if (isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Перенаправление на главную...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Перенаправление на главную страницу...</p>
         </div>
       </div>
     );
@@ -51,117 +40,95 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const success = await login(username, password);
-      if (!success) {
-        setError('Неверное имя пользователя или пароль');
+      const result = await login(email, password);
+      
+      if (result.success) {
+        console.log('✅ Login successful, will redirect via useEffect');
+        // Редирект произойдет автоматически через useEffect
+        // когда обновится состояние user
+      } else {
+        setError(result.error || 'Ошибка входа');
       }
-      // При успешном входе перенаправление произойдет через useEffect
-    } catch (err) {
-      setError('Произошла ошибка при входе');
+    } catch (err: any) {
+      setError(err.message || 'Ошибка входа');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const demoLogin = (demoUser: string) => {
-    setUsername(demoUser);
-    setPassword(demoUser + '123');
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden">
-        <div className="p-8">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">
-              🐛 Bug Tracker
-            </h1>
-            <p className="text-gray-600">Войдите в свою учетную запись</p>
-          </div>
-
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Вход в Bug Tracker
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Или{' '}
+            <Link href="/auth/register" className="font-medium text-blue-600 hover:text-blue-500">
+              создайте новый аккаунт
+            </Link>
+          </p>
+        </div>
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center">
-                <span className="text-red-600 mr-2">⚠️</span>
-                <span className="text-red-800">{error}</span>
-              </div>
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-                Имя пользователя
+              <label htmlFor="email" className="sr-only">
+                Email
               </label>
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Введите ваш username"
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
                 required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="sr-only">
                 Пароль
               </label>
               <input
                 id="password"
+                name="password"
                 type="password"
+                autoComplete="current-password"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Пароль"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
-                placeholder="Введите ваш пароль"
-                required
               />
             </div>
+          </div>
 
+          <div>
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? 'Вход...' : 'Войти'}
             </button>
-          </form>
-
-          {/* Демо-аккаунты */}
-          <div className="mt-8">
-            <h3 className="text-sm font-medium text-gray-500 mb-3 text-center">Демо-аккаунты:</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => demoLogin('admin')}
-                className="p-2 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors"
-              >
-                👑 Admin
-              </button>
-              <button
-                onClick={() => demoLogin('developer')}
-                className="p-2 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors"
-              >
-                💻 Dev
-              </button>
-              <button
-                onClick={() => demoLogin('manager')}
-                className="p-2 bg-gray-100 rounded-lg text-xs hover:bg-gray-200 transition-colors"
-              >
-                📊 Manager
-              </button>
-            </div>
           </div>
 
-          <div className="mt-6 text-center">
-            <p className="text-gray-600">
-              Нет аккаунта?{' '}
-              <Link href="/auth/register" className="text-blue-500 hover:text-blue-600 font-medium">
-                Зарегистрироваться
-              </Link>
+          <div className="text-center">
+            <p className="text-sm text-gray-600">
+              Демо доступ: admin@bugtracker.com / password123
             </p>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
