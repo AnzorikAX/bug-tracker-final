@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Task } from '../hooks/useTasks';
-import { useAuth } from '../hooks/useAuth'; // ← ДОБАВЛЕНО: Импорт хука для получения пользователей
+import { useAuth } from '../hooks/useAuth';
 
 type EditTaskModalProps = {
   isOpen: boolean;
@@ -12,8 +12,9 @@ type EditTaskModalProps = {
 };
 
 export default function EditTaskModal({ isOpen, onClose, onTaskUpdate, task }: EditTaskModalProps) {
-  const { getAllUsers } = useAuth(); // ← ДОБАВЛЕНО: Получаем метод для получения пользователей
-  const [users, setUsers] = useState<any[]>([]); // ← ДОБАВЛЕНО: Состояние для списка пользователей
+  const { getAllUsers } = useAuth();
+  const [users, setUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false); // ← ДОБАВЛЕНО: состояние загрузки
   
   const [formData, setFormData] = useState({
     title: '',
@@ -29,25 +30,42 @@ export default function EditTaskModal({ isOpen, onClose, onTaskUpdate, task }: E
     deadline: ''
   });
 
-  // Эффект для загрузки пользователей и заполнения формы ← ОБНОВЛЕНО
+  // 🔥 ИСПРАВЛЕНИЕ: getAllUsers возвращает Promise - нужно await
   useEffect(() => {
-    if (isOpen) {
-      const allUsers = getAllUsers();
-      setUsers(allUsers);
-      
-      if (task) {
-        setFormData({
-          title: task.title,
-          description: task.description || '',
-          priority: task.priority,
-          assignee: task.assignee,
-          status: task.status,
-          deadline: task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : ''
-        });
-        setErrors({ title: '', deadline: '' });
+    const loadUsers = async () => {
+      if (isOpen) {
+        try {
+          setIsLoadingUsers(true);
+          console.log('🔄 Загрузка пользователей для модального окна...');
+          
+          // 🔥 getAllUsers() - асинхронная функция, возвращает Promise
+          const allUsers = await getAllUsers();
+          console.log('✅ Пользователи загружены:', allUsers);
+          
+          setUsers(Array.isArray(allUsers) ? allUsers : []);
+          
+          if (task) {
+            setFormData({
+              title: task.title,
+              description: task.description || '',
+              priority: task.priority,
+              assignee: task.assignee,
+              status: task.status,
+              deadline: task.deadline ? new Date(task.deadline).toISOString().split('T')[0] : ''
+            });
+            setErrors({ title: '', deadline: '' });
+          }
+        } catch (error) {
+          console.error('❌ Ошибка загрузки пользователей:', error);
+          setUsers([]); // Устанавливаем пустой массив при ошибке
+        } finally {
+          setIsLoadingUsers(false);
+        }
       }
-    }
-  }, [task, isOpen, getAllUsers]);
+    };
+
+    loadUsers();
+  }, [task, isOpen, getAllUsers]); // 🔥 getAllUsers теперь в зависимостях
 
   // Функция валидации формы
   const validateForm = () => {
@@ -334,7 +352,7 @@ export default function EditTaskModal({ isOpen, onClose, onTaskUpdate, task }: E
               </div>
             </div>
 
-            {/* Блок выбора исполнителя ← ОБНОВЛЕНО */}
+            {/* Блок выбора исполнителя - ИСПРАВЛЕННЫЙ */}
             <div>
               <label htmlFor="assignee" className="block text-sm font-medium text-gray-700 mb-2">
                 Исполнитель
@@ -345,17 +363,18 @@ export default function EditTaskModal({ isOpen, onClose, onTaskUpdate, task }: E
                 value={formData.assignee}
                 onChange={handleChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoadingUsers} // 🔥 ДОБАВЛЕНО: отключаем во время загрузки
               >
                 <option value="">Не назначен</option>
-                {/* Динамически генерируем опции из списка пользователей */}
-                {users.map((user) => (
+                {/* 🔥 ИСПРАВЛЕНИЕ: проверяем что users - массив */}
+                {Array.isArray(users) && users.map((user) => (
                   <option key={user.id} value={user.name}>
-  {user.name} {user.role === 'admin' ? '👑' : ''}
-</option>
+                    {user.name} {user.role === 'admin' ? '👑' : ''}
+                  </option>
                 ))}
               </select>
               <p className="text-gray-500 text-sm mt-1">
-                Выберите пользователя из списка
+                {isLoadingUsers ? 'Загрузка пользователей...' : 'Выберите пользователя из списка'}
               </p>
             </div>
           </div>

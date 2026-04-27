@@ -1,144 +1,102 @@
-"use client"; // ← ДОБАВЬ ЭТУ СТРОКУ В САМОМ ВЕРХУ
+"use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../../../hooks/useAuth';
+import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const { register, user } = useAuth();
+  const [error, setError] = useState('');
+  
+  const { user, register } = useAuth();
   const router = useRouter();
 
-  // Если пользователь уже авторизован - редирект на главную
+  // 🔥 ИСПРАВЛЕНИЕ: Используем useEffect для редиректа
+  useEffect(() => {
+    if (user) {
+      router.push('/');
+    }
+  }, [user, router]);
+
+  // Если пользователь уже авторизован - показываем загрузку
   if (user) {
-    router.push('/');
-    return null;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Перенаправление...</p>
+        </div>
+      </div>
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    // Валидация
-    if (password !== confirmPassword) {
-      setError('Пароли не совпадают');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Пароль должен быть не менее 6 символов');
-      return;
-    }
-
     setIsLoading(true);
+    setError('');
 
     try {
       const result = await register(email, name, password);
-      
       if (result.success) {
         router.push('/');
       } else {
-        setError(result.error || 'Ошибка регистрации');
+        setError(result.error || 'Registration failed');
       }
     } catch (err: any) {
-      setError(err.message || 'Ошибка регистрации');
+      setError(err.message || 'Registration failed');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Регистрация в Bug Tracker
+            Создать аккаунт
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Или{' '}
-            <Link href="/auth/login" className="font-medium text-blue-600 hover:text-blue-500">
-              войдите в существующий аккаунт
-            </Link>
-          </p>
         </div>
-        
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
-
-          <div className="space-y-4">
+          
+          <div className="rounded-md shadow-sm -space-y-px">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Имя
-              </label>
               <input
-                id="name"
-                name="name"
                 type="text"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Ваше имя"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Имя"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
               <input
-                id="email"
-                name="email"
                 type="email"
-                autoComplete="email"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Пароль
-              </label>
               <input
-                id="password"
-                name="password"
                 type="password"
                 required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Пароль (минимум 6 символов)"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                placeholder="Пароль"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
-                Подтверждение пароля
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Повторите пароль"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
           </div>
@@ -151,6 +109,12 @@ export default function RegisterPage() {
             >
               {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
             </button>
+          </div>
+
+          <div className="text-center">
+            <Link href="/auth/login" className="text-blue-600 hover:text-blue-500">
+              Уже есть аккаунт? Войти
+            </Link>
           </div>
         </form>
       </div>

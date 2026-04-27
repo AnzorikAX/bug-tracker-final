@@ -347,6 +347,49 @@ export default function TaskBoard() {
             <span>+</span>
             <span>Создать задачу</span>
           </button>
+          <button
+  onClick={() => setIsModalOpen(true)}
+  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+  disabled={isLoading}
+>
+  <span>+</span>
+  <span>Создать задачу</span>
+</button>
+
+{/* 🔥 ДОБАВЬ ЭТУ КНОПКУ ПРЯМО ЗДЕСЬ 🔥 */}
+<button
+  onClick={async () => {
+    console.log('🧪 Тест email API...');
+    
+    const response = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task: {
+          id: 999,
+          title: 'Тест',
+          description: 'Тест email',
+          priority: 'high',
+          assignee: 'Тест',
+          status: 'todo'
+        },
+        assigneeEmail: 'test@ethereal.email'
+      })
+    });
+    
+    const result = await response.json();
+    console.log('📧 Результат:', result);
+    
+    if (result.success) {
+      alert('✅ Email API работает!');
+      if (result.previewUrl) window.open(result.previewUrl, '_blank');
+    }
+  }}
+  className="bg-green-500 text-white px-4 py-2 rounded-lg ml-2"
+>
+  🧪 Тест Email
+</button>
+{/* 🔥 КОНЕЦ КНОПКИ 🔥 */}
         </div>
       </div>
 

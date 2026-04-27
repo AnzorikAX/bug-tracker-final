@@ -31,14 +31,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
-  // 🔄 API запрос с улучшенной обработкой ошибок
+  // 🔄 API запрос с улучшенной обработкой ошибок И ПЕРЕДАЧЕЙ ТОКЕНА
   const apiRequest = async (url: string, options: RequestInit = {}) => {
     try {
       console.log(`🔄 API Request: ${url}`, options);
       
+      // 🔥 ВСЕГДА ДОБАВЛЯЕМ ТОКЕН К ЗАПРОСАМ
+      const token = localStorage.getItem('bug-tracker-token');
+      
       const response = await fetch(`/api${url}`, {
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }), // 🔥 ДОБАВЛЕНО
           ...options.headers,
         },
         ...options,
@@ -160,11 +164,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  // 🔍 Получение всех пользователей
+  // 🔍 Получение всех пользователей (ОБНОВЛЕННАЯ - С ТОКЕНОМ)
   const getAllUsers = async (): Promise<User[]> => {
     try {
       console.log('🔍 Fetching all users from API...');
-      const data = await apiRequest('/users');
+      const token = localStorage.getItem('bug-tracker-token');
+      console.log('🔑 Token for users request:', token ? 'present' : 'missing');
+      
+      // 🔥 ЯВНО ПЕРЕДАЕМ ТОКЕН ДЛЯ ЗАЩИЩЕННОГО ЭНДПОИНТА
+      const data = await apiRequest('/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
       console.log('✅ Users fetched:', data.data?.length || 0);
       return data.data || [];
     } catch (error) {
@@ -173,36 +186,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // 👤 Создание пользователя (для админки)
-const createUser = async (userData: {
-  email: string;
-  name: string;
-  password: string;
-  role?: 'admin' | 'user';
-}): Promise<boolean> => {
-  try {
-    console.log('👤 Creating user:', userData);
-    
-    const data = await apiRequest('/users', {
-      method: 'POST',
-      body: JSON.stringify(userData)
-    });
+  // 👤 Создание пользователя (ОБНОВЛЕННАЯ - С ТОКЕНОМ)
+  const createUser = async (userData: {
+    email: string;
+    name: string;
+    password: string;
+    role?: 'admin' | 'user';
+  }): Promise<boolean> => {
+    try {
+      console.log('👤 Creating user:', userData);
+      const token = localStorage.getItem('bug-tracker-token');
+      
+      // 🔥 ЯВНО ПЕРЕДАЕМ ТОКЕН ДЛЯ ЗАЩИЩЕННОГО ЭНДПОИНТА
+      const data = await apiRequest('/users', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(userData)
+      });
 
-    console.log('📊 Create user response:', data);
+      console.log('📊 Create user response:', data);
 
-    if (data.success) {
-      console.log('✅ User created successfully:', userData.email);
-      return true;
-    } else {
-      console.log('❌ Create user failed - API returned error:', data.error);
+      if (data.success) {
+        console.log('✅ User created successfully:', userData.email);
+        return true;
+      } else {
+        console.log('❌ Create user failed - API returned error:', data.error);
+        return false;
+      }
+    } catch (error: any) {
+      console.error('💥 Error creating user:', error);
+      console.error('💥 Error details:', error.message, error.stack);
       return false;
     }
-  } catch (error: any) {
-    console.error('💥 Error creating user:', error);
-    console.error('💥 Error details:', error.message, error.stack);
-    return false;
-  }
-};
+  };
 
   const value = {
     user,
@@ -212,7 +230,7 @@ const createUser = async (userData: {
     logout,
     checkAuth,
     getAllUsers,
-    createUser, // ← ДОБАВЛЕНА функция создания пользователей
+    createUser,
   };
 
   return (

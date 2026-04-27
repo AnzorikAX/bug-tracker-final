@@ -2,6 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { useNotifications } from "./useNotifications";
+console.log('📧 [DEBUG] process.env.NEXT_PUBLIC_EMAIL_ENABLED =', process.env.NEXT_PUBLIC_EMAIL_ENABLED);
+
+// Добавьте это после импортов
+type EmailType = 
+  | 'task-created'
+  | 'task-updated'
+  | 'task-completed'
+  | 'deadline-soon'
+  | 'task-overdue'
+  | 'test';
 
 export type Task = {
   id: number;
@@ -12,7 +22,7 @@ export type Task = {
   assignee: string;
   createdAt: Date;
   updatedAt: Date;
-  createdBy?: string;  // ← ИЗМЕНИЛ НА string
+  createdBy?: string;
   deadline: Date | null;
 };
 
@@ -39,25 +49,41 @@ export function useTasks() {
 
   // 🔄 Загружаем задачи из API при первом рендере
   useEffect(() => {
-    if (!isInitialized) {
-      loadTasksFromAPI();
-      setIsInitialized(true);
-    }
-  }, [isInitialized]);
+  if (!isInitialized) {
+    loadTasksFromAPI();
+    setIsInitialized(true);
+  }
+}, [isInitialized]);
 
-  // Сохраняем задачи в localStorage при каждом изменении
-  useEffect(() => {
-    if (typeof window !== 'undefined' && isInitialized) {
-      localStorage.setItem('bug-tracker-tasks', JSON.stringify(tasks));
-    }
-  }, [tasks, isInitialized]);
+// 2. Второй useEffect - для localStorage
+useEffect(() => {
+  if (typeof window !== 'undefined' && isInitialized) {
+    localStorage.setItem('bug-tracker-tasks', JSON.stringify(tasks));
+  }
+}, [tasks, isInitialized]);
+
+// 3. Третий useEffect - для проверки дедлайнов (email)
+useEffect(() => {
+  if (typeof window !== 'undefined' && 
+      process.env.NEXT_PUBLIC_EMAIL_ENABLED === 'true' && 
+      isInitialized) {
+    console.log('⏰ Начинаем проверку дедлайнов...');
+    checkDeadlines();
+    
+    const interval = setInterval(checkDeadlines, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }
+}, [tasks, isInitialized]); // ← Эта строка правильная
 
   // 🔄 API функции
   const apiRequest = async (url: string, options: RequestInit = {}) => {
     try {
+      const token = localStorage.getItem('bug-tracker-token');
+      
       const response = await fetch(`/api${url}`, {
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
           ...options.headers,
         },
         ...options,
@@ -116,73 +142,326 @@ export function useTasks() {
     }
     return tasks;
   };
+// 🔥 НОВЫЕ ФУНКЦИИ ДЛЯ EMAIL ======================
 
-  // ✅ Создание задачи (dual-write)
-  const createTask = async (
-    taskData: Omit<Task, "id" | "createdAt" | "updatedAt">,
-    userId: string  // ← ИСПРАВЛЕНО НА string
-  ) => {
-    const taskId = Date.now();
-    const newTask: Task = {
-      ...taskData,
-      id: taskId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      createdBy: userId,
+// Функция для поиска пользователя по имени
+const findUserByUsername = async (username: string) => {
+  try {
+    const users = await fetch('/api/users').then(res => res.json());
+    return users.find((user: any) => user.username === username);
+  } catch (error) {
+    console.error('Error finding user:', error);
+    return null;
+  }
+};
+
+// Основная функция отправки email
+const sendEmailNotification = async (type: EmailType, data: any, assigneeEmail?: string) => {
+  // ТОЛЬКО проверка на серверный рендеринг
+  if (typeof window === 'undefined') {
+    console.log(`📧 Server-side, skipping`);
+    return null;
+  }
+
+  // 🔥 ИСПРАВЛЕННАЯ ГЕНЕРАЦИЯ EMAIL ===================
+  
+  // Сначала проверяем пропуск некорректных имен
+  const skipNames = ['Главный Администратор', 'Не назначен', '', null, undefined];
+  if (skipNames.includes(data.assignee)) {
+    console.log(`📧 Пропускаем email для '${data.assignee}'`);
+    return null;
+  }
+
+  // Функция для получения фиксированного email
+  const getFixedEmail = (name: string) => {
+    const emailMap: Record<string, string> = {
+      'Главный Администратор': 'admin@ethereal.email',
+      'Иван Иванов': 'ivan.ivanov@ethereal.email',
+      'Петр Петров': 'petr.petrov@ethereal.email',
+      'Мария Сидорова': 'maria.sidorova@ethereal.email',
+      'Алексей Алексеев': 'alexey.alexeev@ethereal.email',
+      'Новый пользователь': 'new.user@ethereal.email',
+      'Тестовый пользователь': 'test.user@ethereal.email'
     };
+    
+    return emailMap[name] || 'user@ethereal.email';
+  };
 
-    console.log('🔄 Создание задачи:', newTask);
+  // Генерация email
+  let emailToSend = assigneeEmail;
+  
+  // Если нет email или это не email
+  if (!emailToSend || !emailToSend.includes('@')) {
+    // Используем фиксированный email
+    emailToSend = getFixedEmail(data.assignee || 'user');
+    console.log(`📧 Фиксированный email для '${data.assignee}': ${emailToSend}`);
+  }
 
-    // 1. Локальное обновление (мгновенно)
-    setTasks((prev) => [...prev, newTask]);
-    addNotification(`Создана новая задача: ${taskData.title}`, "task");
+  // Дополнительная проверка
+  if (!emailToSend || !emailToSend.includes('@')) {
+    console.error(`❌ Некорректный email: ${emailToSend}, skipping`);
+    return null;
+  }
 
-    // 2. API обновление (асинхронно)
-    try {
-      await apiRequest('/tasks', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: taskData.title,
-          description: taskData.description,
-          priority: taskData.priority,
-          assignee: taskData.assignee,
-          dueDate: taskData.deadline?.toISOString(),
-          tags: ['bug-tracker']
-        })
-      });
-      console.log('✅ Задача синхронизирована с API');
-      
-      // 3. После успешного создания в API, обновляем локальное состояние с данными из API
-      setTimeout(async () => {
-        try {
-          const updatedTasks = await loadTasksFromAPI();
-          console.log('✅ Локальное состояние обновлено из API');
-          
-          // Находим нашу новую задачу в обновленном списке
-          const foundTask = updatedTasks.find(task => 
-            task.title === newTask.title && 
-            task.description === newTask.description
-          );
-          
-          if (foundTask) {
-            console.log('✅ Новая задача найдена в API:', foundTask.id);
-          }
-        } catch (error) {
-          console.warn('⚠️ Не удалось обновить из API, но задача сохранена локально');
-        }
-      }, 1000);
-      
-    } catch (error) {
-      console.warn('⚠️ Не удалось синхронизировать задачу с API, сохраняем локально');
+  // ===================================================
+
+  try {
+    console.log(`📧 [${type}] Отправляем на: ${emailToSend}`);
+    console.log(`📧 Данные:`, data);
+    
+    // 📦 СТАРЫЙ ФОРМАТ для совместимости с API
+    const requestBody = {
+  to: emailToSend,
+  type: type, // 'task-created', 'task-updated', etc.
+  data: {
+    taskId: data.taskId || `task-${Date.now()}`,
+    taskTitle: data.taskTitle || data.title || 'Задача без названия',
+    taskDescription: data.taskDescription || data.description || '',
+    priority: data.priority || 'medium',
+    assignee: assigneeName,
+    status: data.status || 'todo',
+    deadline: data.deadline,
+    // Дополнительные поля для совместимости
+    id: data.taskId || `task-${Date.now()}`,
+    title: data.taskTitle || data.title || 'Задача без названия',
+    description: data.taskDescription || data.description || '',
+    appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    updatedBy: 'system'
+  }
+};
+
+    console.log('📧 Отправляемые данные (старый формат):', requestBody);
+    
+    const response = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Email API error: ${response.status}`);
     }
 
-    return newTask;
+    const result = await response.json();
+    console.log(`✅ Email (${type}) отправлен:`, result.messageId);
+    
+    if (result.previewUrl) {
+      console.log(`👀 Preview: ${result.previewUrl}`);
+      // Автоматически открываем в новой вкладке для тестирования
+      if (type === 'test' || type === 'task-created') {
+        window.open(result.previewUrl, '_blank');
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error(`❌ Ошибка отправки email (${type}):`, error);
+    return null;
+  }
+};
+
+// Функция для проверки дедлайнов
+const checkDeadlines = async () => {
+  if (process.env.NEXT_PUBLIC_EMAIL_ENABLED !== 'true') {
+    return;
+  }
+
+  const now = new Date();
+  const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  tasks.forEach(async (task) => {
+    if (!task.deadline || task.status === 'done') return;
+
+    const deadline = new Date(task.deadline);
+    
+    // Проверка "скоро дедлайн" (менее 24 часов)
+    if (deadline > now && deadline <= in24Hours) {
+      await sendEmailNotification('deadline-soon', {
+        taskId: task.id,
+        taskTitle: task.title,
+        deadline: task.deadline,
+        assignee: task.assignee
+      }, task.assignee);
+    }
+
+    // Проверка просроченных задач
+    if (deadline < now && task.status !== 'done') {
+      const overdueDays = Math.floor((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24));
+      await sendEmailNotification('task-overdue', {
+        taskId: task.id,
+        taskTitle: task.title,
+        deadline: task.deadline,
+        overdueBy: `${overdueDays} дней`,
+        assignee: task.assignee
+      }, task.assignee);
+    }
+  });
+};
+
+
+  // ✅ Создание задачи (dual-write)
+const createTask = async (
+  taskData: Omit<Task, "id" | "createdAt" | "updatedAt">,
+  userId: string
+) => {
+  const taskId = Date.now();
+  const newTask: Task = {
+    ...taskData,
+    id: taskId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: userId,
   };
+
+  console.log('🔄 Создание задачи:', newTask);
+  console.log('📌 Assignee для email:', taskData.assignee);
+
+  // 🔥 EMAIL: Отправляем улучшенное уведомление
+  console.log('🔍 Проверка окружения:');
+  console.log('  - window доступен:', typeof window !== 'undefined');
+  console.log('  - EMAIL_ENABLED:', process.env.NEXT_PUBLIC_EMAIL_ENABLED);
+  console.log('  - Режим:', process.env.NODE_ENV);
+
+  if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_EMAIL_ENABLED === 'true') {
+    console.log('=== 📧 ОТПРАВКА EMAIL (НОВАЯ ВЕРСИЯ) ===');
+    
+    // 🔧 ИСПРАВЛЕННАЯ ГЕНЕРАЦИЯ EMAIL
+    const getFixedEmailForAssignee = (assigneeName: string) => {
+      const emailMap: Record<string, string> = {
+        'Тестовый пользователь': 'test.user@ethereal.email',
+        'Новый пользователь': 'new.user@ethereal.email',
+        'Иван Иванов': 'ivan.ivanov@ethereal.email',
+        'Петр Петров': 'petr.petrov@ethereal.email',
+        'Мария Сидорова': 'maria.sidorova@ethereal.email',
+        'Алексей Алексеев': 'alexey.alexeev@ethereal.email',
+        'Администратор': 'admin@ethereal.email',
+        'Главный Администратор': 'admin@ethereal.email'
+      };
+      
+      // Ищем точное совпадение
+      if (emailMap[assigneeName]) {
+        return emailMap[assigneeName];
+      }
+      
+      // Ищем частичное совпадение (без учета регистра)
+      const lowerAssignee = assigneeName.toLowerCase();
+      for (const [key, value] of Object.entries(emailMap)) {
+        if (key.toLowerCase().includes(lowerAssignee) || 
+            lowerAssignee.includes(key.toLowerCase())) {
+          return value;
+        }
+      }
+      
+      // Fallback: простой email из имени
+      return `${assigneeName.toLowerCase()
+        .replace(/\s+/g, '.')
+        .replace(/[^a-zа-яё0-9.]/g, '') // Разрешаем кириллицу
+        .replace(/[а-яё]/g, char => {
+          // Простая транслитерация для кириллицы
+          const map: Record<string, string> = {
+            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+            'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+            'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+            'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+            'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+          };
+          return map[char] || '';
+        })
+        .replace(/\.+/g, '.')
+        .replace(/^\.|\.$/g, '')}@ethereal.email`;
+    };
+
+    // Получаем email
+    const assigneeEmail = getFixedEmailForAssignee(taskData.assignee || 'user');
+    console.log(`📧 Email для '${taskData.assignee}': ${assigneeEmail}`);
+
+    // Проверяем валидность email перед отправкой
+    if (!assigneeEmail || !assigneeEmail.includes('@') || assigneeEmail === '.@ethereal.email') {
+      console.warn('⚠️ Некорректный email, пропускаем отправку');
+    } else {
+      console.log(`📧 Отправляем 'task-created' на: ${assigneeEmail}`);
+      
+      // Асинхронно отправляем, но не ждем
+      sendEmailNotification('task-created', {
+        taskId: taskId,
+        taskTitle: taskData.title,
+        taskDescription: taskData.description,
+        assignee: taskData.assignee,
+        priority: taskData.priority,
+        deadline: taskData.deadline,
+        status: taskData.status || 'todo'
+      }, assigneeEmail).then(result => {
+        if (result) {
+          console.log('✅ Email отправлен успешно');
+          console.log('👀 Preview:', result.previewUrl);
+          if (result.previewUrl) {
+            window.open(result.previewUrl, '_blank');
+          }
+        }
+      }).catch(err => {
+        console.error('❌ Ошибка при отправке email:', err);
+      });
+    } // ← Закрываем else блока проверки email
+    
+  } else { // ← Это else для ПЕРВОГО if (проверка window и EMAIL_ENABLED)
+    console.log('📧 Email отправка отключена или серверный рендеринг');
+  }
+
+  // 1. Локальное обновление (мгновенно)
+  setTasks((prev) => [...prev, newTask]);
+  addNotification(`Создана новая задача: ${taskData.title}`, "task");
+
+  // 2. API обновление (асинхронно)
+  try {
+    await apiRequest('/tasks', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: taskData.title,
+        description: taskData.description,
+        priority: taskData.priority,
+        assignee: taskData.assignee,
+        dueDate: taskData.deadline?.toISOString(),
+        tags: ['bug-tracker']
+      })
+    });
+    console.log('✅ Задача синхронизирована с API');
+    
+    // 3. После успешного создания в API, обновляем локальное состояние с данными из API
+    setTimeout(async () => {
+      try {
+        const updatedTasks = await loadTasksFromAPI();
+        console.log('✅ Локальное состояние обновлено из API');
+        
+        // Находим нашу новую задачу в обновленном списке
+        const foundTask = updatedTasks.find(task => 
+          task.title === newTask.title && 
+          task.description === newTask.description
+        );
+        
+        if (foundTask) {
+          console.log('✅ Новая задача найдена в API:', foundTask.id);
+        }
+      } catch (error) {
+        console.warn('⚠️ Не удалось обновить из API, но задача сохранена локально');
+      }
+    }, 1000);
+    
+  } catch (error) {
+    console.warn('⚠️ Не удалось синхронизировать задачу с API, сохраняем локально');
+  }
+
+  return newTask;
+};
 
   // ✅ Обновление задачи (dual-write)
   const updateTask = async (id: number, updatedFields: Partial<Task>) => {
     const taskToUpdate = tasks.find(t => t.id === id);
     
+    if (!taskToUpdate) {
+      console.warn('❌ Задача не найдена:', id);
+      return;
+    }
+
     console.log('🔄 Обновление задачи:', id, updatedFields);
 
     // 1. Локальное обновление (мгновенно)
@@ -192,9 +471,7 @@ export function useTasks() {
       )
     );
 
-    if (taskToUpdate) {
-      addNotification(`Задача обновлена: ${taskToUpdate.title}`, "task");
-    }
+    addNotification(`Задача обновлена: ${taskToUpdate.title}`, "task");
 
     // 2. API обновление (асинхронно)
     try {
@@ -217,6 +494,93 @@ export function useTasks() {
       console.warn('⚠️ Не удалось синхронизировать обновление с API, сохраняем локально');
     }
   };
+  // ✅ Обновление задачи с email уведомлениями
+const updateTaskWithNotification = async (
+  id: number, 
+  updatedFields: Partial<Task>, 
+  userId: string
+) => {
+  const taskToUpdate = tasks.find(t => t.id === id);
+  
+  if (!taskToUpdate) {
+    console.warn('❌ Задача не найдена:', id);
+    return;
+  }
+
+  console.log('🔄 Обновление задачи с уведомлением:', id, updatedFields);
+
+  // Проверяем изменения для email уведомления
+  const changes = {
+    status: updatedFields.status !== taskToUpdate.status ? 
+      { old: taskToUpdate.status, new: updatedFields.status } : null,
+    priority: updatedFields.priority !== taskToUpdate.priority ? 
+      { old: taskToUpdate.priority, new: updatedFields.priority } : null,
+    assignee: updatedFields.assignee !== taskToUpdate.assignee ? 
+      { old: taskToUpdate.assignee, new: updatedFields.assignee } : null
+  };
+
+  // 1. Локальное обновление (мгновенно)
+  setTasks((prev) =>
+    prev.map((task) =>
+      task.id === id ? { ...task, ...updatedFields, updatedAt: new Date() } : task
+    )
+  );
+
+  addNotification(`Задача обновлена: ${taskToUpdate.title}`, "task");
+
+  // 2. Отправляем email если есть изменения
+  const hasChanges = Object.values(changes).some(change => change !== null);
+  
+  if (hasChanges && process.env.NEXT_PUBLIC_EMAIL_ENABLED === 'true') {
+    // Определяем тип email
+    let emailType: EmailType = 'task-updated';
+    if (updatedFields.status === 'done' && taskToUpdate.status !== 'done') {
+      emailType = 'task-completed';
+    }
+
+    // Определяем получателя
+    const recipient = updatedFields.assignee || taskToUpdate.assignee;
+    
+    if (recipient) {
+      const assigneeEmail = `${recipient.toLowerCase()
+        .replace(/\s+/g, '.')
+        .replace(/[^a-z0-9.]/g, '')}@ethereal.email`;
+
+      await sendEmailNotification(emailType, {
+        taskId: id,
+        taskTitle: updatedFields.title || taskToUpdate.title,
+        oldStatus: taskToUpdate.status,
+        newStatus: updatedFields.status,
+        oldPriority: taskToUpdate.priority,
+        newPriority: updatedFields.priority,
+        oldAssignee: taskToUpdate.assignee,
+        newAssignee: updatedFields.assignee,
+        deadline: updatedFields.deadline || taskToUpdate.deadline,
+        updatedBy: userId
+      }, assigneeEmail);
+    }
+  }
+
+  // 3. API обновление (асинхронно)
+  try {
+    const apiStatus = updatedFields.status === 'inprogress' ? 'in-progress' : updatedFields.status;
+
+    await apiRequest(`/tasks/task-${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: updatedFields.title,
+        description: updatedFields.description,
+        status: apiStatus,
+        priority: updatedFields.priority,
+        assignee: updatedFields.assignee,
+        dueDate: updatedFields.deadline?.toISOString()
+      })
+    });
+    console.log('✅ Обновление задачи синхронизировано с API');
+  } catch (error) {
+    console.warn('⚠️ Не удалось синхронизировать обновление с API, сохраняем локально');
+  }
+};
 
   // ✅ Удаление задачи (dual-write)
   const deleteTask = async (id: number) => {
@@ -365,12 +729,12 @@ export function useTasks() {
   };
 
   // ✅ Задачи конкретного пользователя
-  const getUserTasks = (userId: string) => {  // ← ИСПРАВЛЕНО НА string
+  const getUserTasks = (userId: string) => {
     return tasks.filter((t) => t.createdBy === userId || t.assignee === String(userId));
   };
 
   // ✅ Статистика конкретного пользователя
-  const getUserStats = (userId: string) => {  // ← ИСПРАВЛЕНО НА string
+  const getUserStats = (userId: string) => {
     const userTasks = getUserTasks(userId);
     const now = new Date();
     const overdue = userTasks.filter(t => 
@@ -476,20 +840,21 @@ export function useTasks() {
   };
 
   return {
-    tasks,
-    isLoading,
-    createTask,
-    updateTask,
-    deleteTask,
-    moveTask,
-    getStats,
-    getFilteredTasks,
-    getUserTasks,
-    getUserStats,
-    clearAllTasks,
-    restoreDemoData,
-    exportTasks,
-    getDeadlineStatus,
-    loadTasksFromAPI
-  };
-}
+  tasks,
+  isLoading,
+  createTask,
+  updateTask,
+  updateTaskWithNotification, // ← ДОБАВЬТЕ ЭТО
+  deleteTask,
+  moveTask,
+  getStats,
+  getFilteredTasks,
+  getUserTasks,
+  getUserStats,
+  clearAllTasks,
+  restoreDemoData,
+  exportTasks,
+  getDeadlineStatus,
+  loadTasksFromAPI,
+  checkDeadlines // ← ДОБАВЬТЕ ЭТО (опционально, для тестов)
+};
