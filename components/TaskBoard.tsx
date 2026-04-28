@@ -1,10 +1,9 @@
-'use client';
+﻿'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import TaskModal from './TaskModal';
 import EditTaskModal from './EditTaskModal';
 import SearchBar from './SearchBar';
-import LoadingSpinner from './LoadingSpinner'; // ← ДОБАВЛЕНО: Импорт компонента загрузки
 import { useTasks, type Task } from '../hooks/useTasks';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
@@ -12,33 +11,76 @@ import { useToast } from './ToastProvider';
 
 type StatusType = 'todo' | 'inprogress' | 'done';
 
-type Status = {
+type BoardStatus = {
   id: StatusType;
   title: string;
+  icon: string;
   color: string;
 };
 
+type ChatMessage = {
+  id: string;
+  taskId: number;
+  author: string;
+  body: string;
+  kind: 'user' | 'system';
+  createdAt: string;
+};
+
+type ApiMessage = {
+  id: number;
+  taskId: string;
+  author: string;
+  body: string;
+  kind: 'user' | 'system';
+  createdAt: string;
+};
+
+const statuses: BoardStatus[] = [
+  { id: 'todo', title: 'К выполнению', icon: '📋', color: 'bg-slate-100' },
+  { id: 'inprogress', title: 'В работе', icon: '🚀', color: 'bg-blue-100' },
+  { id: 'done', title: 'Выполнено', icon: '✅', color: 'bg-green-100' },
+];
+
+const seedChats = (tasks: Task[]): Record<number, ChatMessage[]> => {
+  return tasks.reduce<Record<number, ChatMessage[]>>((acc, task) => {
+    acc[task.id] = [
+      {
+        id: `sys-${task.id}-1`,
+        taskId: task.id,
+        author: 'Система',
+        body: `Задача создана: «${task.title}»`,
+        kind: 'system',
+        createdAt: new Date(task.createdAt).toLocaleString('ru-RU'),
+      },
+      {
+        id: `sys-${task.id}-2`,
+        taskId: task.id,
+        author: 'Система',
+        body: `${task.assignee} назначен(а) исполнителем`,
+        kind: 'system',
+        createdAt: new Date(task.updatedAt).toLocaleString('ru-RU'),
+      },
+    ];
+    return acc;
+  }, {});
+};
+
 export default function TaskBoard() {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
-
-  // Состояния поиска и фильтров
   const [searchQuery, setSearchQuery] = useState('');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'my'>('all');
   const [filters, setFilters] = useState({
     priority: 'all',
     status: 'all',
     assignee: 'all',
   });
 
-  const [taskFilter, setTaskFilter] = useState<'all' | 'my'>('all');
-
-  // ДОБАВЛЕНО: Состояния загрузки для разных операций
-  const [isCreating, setIsCreating] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isMoving, setIsMoving] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [chatInput, setChatInput] = useState('');
 
   const {
     tasks,
@@ -49,7 +91,6 @@ export default function TaskBoard() {
     getStats,
     getFilteredTasks,
     getUserTasks,
-    getUserStats,
     getDeadlineStatus,
   } = useTasks();
 
@@ -57,200 +98,257 @@ export default function TaskBoard() {
   const { addNotification } = useNotifications();
   const { addToast } = useToast();
 
-  // Базовые задачи (все или только мои)
+  const [taskChats, setTaskChats] = useState<Record<number, ChatMessage[]>>(() => seedChats(tasks));
+  const [loadedChats, setLoadedChats] = useState<Record<number, boolean>>({});
+  const [unreadByTask, setUnreadByTask] = useState<Record<number, number>>(() => {
+    return tasks.reduce<Record<number, number>>((acc, t) => {
+      acc[t.id] = t.status === 'done' ? 0 : 1;
+      return acc;
+    }, {});
+  });
+
   const baseTasks = useMemo(() => {
-    if (taskFilter === 'my' && user) {
-      return getUserTasks(user.id);
-    }
+    if (taskFilter === 'my' && user) return getUserTasks(user.id);
     return tasks;
-  }, [tasks, taskFilter, user, getUserTasks]);
+  }, [taskFilter, user, getUserTasks, tasks]);
 
-  // Применяем поиск и фильтры
   const filteredTasks = useMemo(() => {
-    return getFilteredTasks(
-      {
-        query: searchQuery,
-        ...filters,
-      },
-      baseTasks
-    );
-  }, [baseTasks, searchQuery, filters, getFilteredTasks]);
+    return getFilteredTasks({ query: searchQuery, ...filters }, baseTasks);
+  }, [baseTasks, filters, searchQuery, getFilteredTasks]);
 
-  const statuses: Status[] = [
-    { id: 'todo', title: '📋 К выполнению', color: 'bg-gray-100' },
-    { id: 'inprogress', title: '🚀 В работе', color: 'bg-blue-100' },
-    { id: 'done', title: '✅ Выполнено', color: 'bg-green-100' },
-  ];
+  const selectedTask = useMemo(
+    () => filteredTasks.find((task) => task.id === selectedTaskId) ?? tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [filteredTasks, selectedTaskId, tasks]
+  );
 
-  // --- Обработчики с уведомлениями, toast и индикаторами загрузки ← ОБНОВЛЕНО ---
-  const handleTaskCreate = async (
-    taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>
-  ) => {
-    if (user) {
-      setIsCreating(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
-      try {
-        // Имитируем задержку для демонстрации индикатора загрузки
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        createTask(taskData, user.id);
-        addNotification(`Создана новая задача: "${taskData.title}"`, 'task');
-        addToast(`Задача "${taskData.title}" успешно создана!`, 'success');
-      } catch (error) {
-        addToast('Ошибка при создании задачи', 'error');
-        console.error('Error creating task:', error);
-      } finally {
-        setIsCreating(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
-      }
-    }
-  };
+  const selectedChat = selectedTask ? taskChats[selectedTask.id] ?? [] : [];
+  const getApiTaskId = (taskId: number) => `task-${taskId}`;
 
-  const handleTaskUpdate = async (updatedTask: Task) => {
-    setIsUpdating(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
-    try {
-      // Имитируем задержку для демонстрации индикатора загрузки
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      updateTask(updatedTask.id, updatedTask);
-      addNotification(`Задача обновлена: "${updatedTask.title}"`, 'task');
-      addToast(`Задача "${updatedTask.title}" успешно обновлена!`, 'success');
-    } catch (error) {
-      addToast('Ошибка при обновлении задачи', 'error');
-      console.error('Error updating task:', error);
-    } finally {
-      setIsUpdating(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
-    }
-  };
-
-  const openEditModal = (task: Task) => {
-    setEditingTask(task);
-    setIsEditModalOpen(true);
-  };
-
-  const handleDeleteTask = async (taskId: number) => {
-    const taskToDelete = tasks.find(t => t.id === taskId);
-    if (confirm('Вы уверены, что хотите удалить эту задачу?')) {
-      setIsDeleting(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
-      try {
-        // Имитируем задержку для демонстрации индикатора загрузки
-        await new Promise(resolve => setTimeout(resolve, 600));
-        
-        deleteTask(taskId);
-        addNotification(`Задача #${taskId} была удалена`, 'task');
-        if (taskToDelete) {
-          addToast(`Задача "${taskToDelete.title}" удалена`, 'info');
-        }
-      } catch (error) {
-        addToast('Ошибка при удалении задачи', 'error');
-        console.error('Error deleting task:', error);
-      } finally {
-        setIsDeleting(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
-      }
-    }
-  };
-
-  const handleSearch = (query: string) => setSearchQuery(query);
-  const handleFilterChange = (newFilters: any) => setFilters(newFilters);
-
-  const handleTaskFilterChange = (filter: 'all' | 'my') => {
-    setTaskFilter(filter);
-    setSearchQuery('');
-    setFilters({
-      priority: 'all',
-      status: 'all',
-      assignee: 'all',
+  const ensureChatThread = (task: Task) => {
+    setTaskChats((prev) => {
+      if (prev[task.id]) return prev;
+      return {
+        ...prev,
+        [task.id]: [
+          {
+            id: `sys-${task.id}-new`,
+            taskId: task.id,
+            author: 'Система',
+            body: `Открыт контекстный чат для задачи «${task.title}»`,
+            kind: 'system',
+            createdAt: new Date().toLocaleString('ru-RU'),
+          },
+        ],
+      };
     });
   };
 
-  // Drag & Drop с toast-уведомлениями и индикатором загрузки ← ОБНОВЛЕНО
-  const handleDragStart = (e: React.DragEvent, task: Task) => {
-    setDraggedTask(task);
-    e.dataTransfer.effectAllowed = 'move';
+  const openTaskContext = (task: Task) => {
+    ensureChatThread(task);
+    setSelectedTaskId(task.id);
+    setUnreadByTask((prev) => ({ ...prev, [task.id]: 0 }));
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!selectedTask || loadedChats[selectedTask.id]) return;
+
+      try {
+        const token = localStorage.getItem('bug-tracker-token');
+        const response = await fetch(`/api/tasks/${getApiTaskId(selectedTask.id)}/messages`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to load messages: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const messages = (result?.data ?? []) as ApiMessage[];
+        const mapped: ChatMessage[] = messages.map((msg) => ({
+          id: `api-${msg.id}`,
+          taskId: selectedTask.id,
+          author: msg.author,
+          body: msg.body,
+          kind: msg.kind,
+          createdAt: new Date(msg.createdAt).toLocaleString('ru-RU'),
+        }));
+
+        setTaskChats((prev) => ({
+          ...prev,
+          [selectedTask.id]: mapped.length > 0 ? mapped : prev[selectedTask.id] ?? [],
+        }));
+      } catch (error) {
+        console.warn('Failed to load chat history for task', selectedTask.id, error);
+      } finally {
+        setLoadedChats((prev) => ({ ...prev, [selectedTask.id]: true }));
+      }
+    };
+
+    loadChatHistory();
+  }, [loadedChats, selectedTask]);
+
+  const addSystemMessage = (taskId: number, body: string) => {
+    setTaskChats((prev) => {
+      const existing = prev[taskId] ?? [];
+      return {
+        ...prev,
+        [taskId]: [
+          ...existing,
+          {
+            id: `sys-${taskId}-${Date.now()}`,
+            taskId,
+            author: 'Система',
+            body,
+            kind: 'system',
+            createdAt: new Date().toLocaleString('ru-RU'),
+          },
+        ],
+      };
+    });
+  };
+
+  const handleCreateTask = async (taskData: Omit<Task, 'id' | 'createdAt' | 'updatedAt' | 'createdBy'>) => {
+    if (!user) return;
+    try {
+      const created = await createTask(taskData, user.id);
+      addNotification(`Создана новая задача: ${taskData.title}`, 'task');
+      addToast(`Задача «${taskData.title}» создана`, 'success');
+      if (created) {
+        const taskId = created.id;
+        setTaskChats((prev) => ({
+          ...prev,
+          [taskId]: [
+            {
+              id: `sys-${taskId}-create`,
+              taskId,
+              author: 'Система',
+              body: `Задача создана и назначена: ${taskData.assignee}`,
+              kind: 'system',
+              createdAt: new Date().toLocaleString('ru-RU'),
+            },
+          ],
+        }));
+        setUnreadByTask((prev) => ({ ...prev, [taskId]: 0 }));
+      }
+    } catch {
+      addToast('Ошибка при создании задачи', 'error');
+    }
+  };
+
+  const handleUpdateTask = async (updatedTask: Task) => {
+    try {
+      await updateTask(updatedTask.id, updatedTask);
+      addSystemMessage(updatedTask.id, `Поля задачи обновлены пользователем ${user?.name || 'пользователь'}`);
+      addToast(`Задача «${updatedTask.title}» обновлена`, 'success');
+    } catch {
+      addToast('Ошибка при обновлении задачи', 'error');
+    }
+  };
+
+  const handleDeleteTask = async (taskId: number) => {
+    if (!confirm('Удалить задачу?')) return;
+    try {
+      await deleteTask(taskId);
+      if (selectedTaskId === taskId) {
+        setSelectedTaskId(null);
+      }
+      addToast('Задача удалена', 'info');
+    } catch {
+      addToast('Ошибка при удалении задачи', 'error');
+    }
   };
 
   const handleDrop = async (e: React.DragEvent, status: StatusType) => {
     e.preventDefault();
-    if (draggedTask) {
-      setIsMoving(true); // ← ДОБАВЛЕНО: Включаем индикатор загрузки
-      try {
-        // Имитируем небольшую задержку для лучшего UX
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        moveTask(draggedTask.id, status);
-        addNotification(`Задача "${draggedTask.title}" перемещена`, 'task');
-        
-        const statusText = status === 'todo' ? 'к выполнению' : 
-                          status === 'inprogress' ? 'в работу' : 'выполнено';
-        addToast(`Задача "${draggedTask.title}" перемещена ${statusText}`, 'info');
-      } catch (error) {
-        addToast('Ошибка при перемещении задачи', 'error');
-        console.error('Error moving task:', error);
-      } finally {
-        setIsMoving(false); // ← ДОБАВЛЕНО: Выключаем индикатор загрузки
-        setDraggedTask(null);
+    if (!draggedTask) return;
+
+    try {
+      await moveTask(draggedTask.id, status);
+      addSystemMessage(
+        draggedTask.id,
+        `Статус изменен: ${draggedTask.status} → ${status}`
+      );
+      setUnreadByTask((prev) => ({
+        ...prev,
+        [draggedTask.id]: selectedTaskId === draggedTask.id ? 0 : (prev[draggedTask.id] ?? 0) + 1,
+      }));
+      addToast(`Задача «${draggedTask.title}» перемещена`, 'info');
+    } catch {
+      addToast('Ошибка при перемещении', 'error');
+    } finally {
+      setDraggedTask(null);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!selectedTask || !chatInput.trim()) return;
+
+    const author = user?.name || 'Пользователь';
+    const body = chatInput.trim();
+    setChatInput('');
+
+    try {
+      const token = localStorage.getItem('bug-tracker-token');
+      const response = await fetch(`/api/tasks/${getApiTaskId(selectedTask.id)}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          author,
+          body,
+          kind: 'user',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to create message: ${response.status}`);
       }
+
+      const result = await response.json();
+      const created = result?.data as ApiMessage | undefined;
+      if (!created) return;
+
+      const message: ChatMessage = {
+        id: `api-${created.id}`,
+        taskId: selectedTask.id,
+        author: created.author,
+        body: created.body,
+        kind: created.kind,
+        createdAt: new Date(created.createdAt).toLocaleString('ru-RU'),
+      };
+
+      setTaskChats((prev) => ({
+        ...prev,
+        [selectedTask.id]: [...(prev[selectedTask.id] ?? []), message],
+      }));
+    } catch {
+      addToast('Ошибка при отправке сообщения', 'error');
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'border-red-500 bg-red-50';
-      case 'medium':
-        return 'border-yellow-500 bg-yellow-50';
-      case 'low':
-        return 'border-green-500 bg-green-50';
-      default:
-        return 'border-gray-300 bg-gray-50';
-    }
-  };
-
-  // Функция для получения цвета дедлайна
-  const getDeadlineColor = (task: Task) => {
-    const status = getDeadlineStatus(task);
-    switch (status) {
-      case 'danger':
-        return 'text-red-600 bg-red-100 border-red-200';
-      case 'warning':
-        return 'text-orange-600 bg-orange-100 border-orange-200';
-      case 'normal':
-        return 'text-green-600 bg-green-100 border-green-200';
-      case 'completed':
-        return 'text-gray-500 bg-gray-100 border-gray-200';
-      default:
-        return 'text-gray-500 bg-gray-100 border-gray-200';
-    }
-  };
-
-  // Функция для получения иконки дедлайна
-  const getDeadlineIcon = (task: Task) => {
-    const status = getDeadlineStatus(task);
-    switch (status) {
-      case 'danger':
-        return '⏰'; // Просрочено
-      case 'warning':
-        return '⚠️'; // Скоро дедлайн
-      case 'normal':
-        return '📅'; // Все ок
-      case 'completed':
-        return '✅'; // Выполнено
-      default:
-        return '📅';
-    }
-  };
-
-  // Функция для форматирования даты
   const formatDeadline = (deadline: Date | null) => {
-    if (!deadline) return 'Не установлен';
+    if (!deadline) return 'Без дедлайна';
     return new Date(deadline).toLocaleDateString('ru-RU');
   };
 
-  const stats = getStats();
-  const userStats = user ? getUserStats(user.id) : null;
+  const getPriorityText = (priority: string) => {
+    if (priority === 'high') return 'Высокий';
+    if (priority === 'low') return 'Низкий';
+    return 'Средний';
+  };
+
+  const getPriorityClasses = (priority: string) => {
+    if (priority === 'high') return 'bg-red-100 text-red-700';
+    if (priority === 'low') return 'bg-emerald-100 text-emerald-700';
+    return 'bg-amber-100 text-amber-700';
+  };
+
   const filteredStats = {
     total: filteredTasks.length,
     todo: filteredTasks.filter((t) => t.status === 'todo').length,
@@ -258,275 +356,222 @@ export default function TaskBoard() {
     done: filteredTasks.filter((t) => t.status === 'done').length,
   };
 
-  // ДОБАВЛЕНО: Общий индикатор загрузки для операций
-  const isLoading = isCreating || isUpdating || isDeleting || isMoving;
-
   return (
-    <div className="p-6">
-      {/* Модалки */}
+    <div className="p-6 relative">
       <TaskModal
-  isOpen={isModalOpen}
-  onClose={() => setIsModalOpen(false)}
-  onTaskCreate={handleTaskCreate}
-  currentUser={user || { id: '0', name: 'Пользователь' }} // ← ИСПРАВИТЬ: id: '0' вместо 0
-/>
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onTaskCreate={handleCreateTask}
+        currentUser={user || { id: '0', name: 'Пользователь' }}
+      />
 
       <EditTaskModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onTaskUpdate={handleTaskUpdate}
+        isOpen={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        onTaskUpdate={handleUpdateTask}
         task={editingTask}
       />
 
-      {/* Индикатор загрузки для операций ← ДОБАВЛЕНО */}
-      {isLoading && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
-          <div className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-sm">
-              {isCreating && 'Создание задачи...'}
-              {isUpdating && 'Обновление задачи...'}
-              {isDeleting && 'Удаление задачи...'}
-              {isMoving && 'Перемещение задачи...'}
-            </span>
-          </div>
-        </div>
-      )}
+      <SearchBar onSearch={setSearchQuery} onFilterChange={setFilters} />
 
-      {/* Поиск и фильтры */}
-      <SearchBar onSearch={handleSearch} onFilterChange={handleFilterChange} />
-
-      {/* Заголовок */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
-            {taskFilter === 'my' ? 'Мои задачи' : 'Доска задач'}
-          </h2>
-          <p className="text-sm text-gray-600">
-            {user?.name && `Добро пожаловать, ${user.name}! `}
-            {filteredTasks.length === baseTasks.length
-              ? `Всего задач: ${baseTasks.length}`
-              : `Найдено: ${filteredTasks.length} из ${baseTasks.length}`}
-            {userStats && taskFilter === 'my' && ` (${userStats.done}/${userStats.total} выполнено)`}
-            {user?.role === 'admin' && ' (Администратор)'}
-          </p>
+          <h2 className="text-3xl font-bold text-slate-900">Мои задачи</h2>
+          <p className="text-slate-600">Единое место для задач, назначений и обсуждений внутри карточки.</p>
         </div>
 
-        <div className="flex items-center space-x-4">
-          {/* Переключатель */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+        <div className="flex items-center gap-3">
+          <div className="bg-slate-100 p-1 rounded-xl">
             <button
-              onClick={() => handleTaskFilterChange('all')}
-              className={`px-4 py-2 rounded-md transition-colors ${
-                taskFilter === 'all'
-                  ? 'bg-white text-gray-800 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-              disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
+              onClick={() => setTaskFilter('all')}
+              className={`px-4 py-2 rounded-lg text-sm ${taskFilter === 'all' ? 'bg-white shadow text-slate-900' : 'text-slate-600'}`}
             >
               Все задачи
             </button>
             <button
-              onClick={() => handleTaskFilterChange('my')}
-              className={`px-4 py-2 rounded-md transition-colors ${
-                taskFilter === 'my'
-                  ? 'bg-white text-gray-800 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-              disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
+              onClick={() => setTaskFilter('my')}
+              className={`px-4 py-2 rounded-lg text-sm ${taskFilter === 'my' ? 'bg-white shadow text-slate-900' : 'text-slate-600'}`}
             >
               Мои задачи
             </button>
           </div>
 
           <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
+            onClick={() => setIsCreateOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl"
           >
-            <span>+</span>
-            <span>Создать задачу</span>
+            + Создать задачу
           </button>
-          <button
-  onClick={() => setIsModalOpen(true)}
-  className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-  disabled={isLoading}
->
-  <span>+</span>
-  <span>Создать задачу</span>
-</button>
-
-{/* 🔥 ДОБАВЬ ЭТУ КНОПКУ ПРЯМО ЗДЕСЬ 🔥 */}
-<button
-  onClick={async () => {
-    console.log('🧪 Тест email API...');
-    
-    const response = await fetch('/api/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task: {
-          id: 999,
-          title: 'Тест',
-          description: 'Тест email',
-          priority: 'high',
-          assignee: 'Тест',
-          status: 'todo'
-        },
-        assigneeEmail: 'test@ethereal.email'
-      })
-    });
-    
-    const result = await response.json();
-    console.log('📧 Результат:', result);
-    
-    if (result.success) {
-      alert('✅ Email API работает!');
-      if (result.previewUrl) window.open(result.previewUrl, '_blank');
-    }
-  }}
-  className="bg-green-500 text-white px-4 py-2 rounded-lg ml-2"
->
-  🧪 Тест Email
-</button>
-{/* 🔥 КОНЕЦ КНОПКИ 🔥 */}
         </div>
       </div>
 
-      {/* Доска */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {statuses.map((status) => (
-          <div
-            key={status.id}
-            className={`rounded-lg p-4 ${status.color} min-h-[400px]`}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, status.id)}
-          >
-            <h3 className="font-semibold text-lg mb-4">
-              {status.title}
-              <span className="ml-2 bg-white px-2 py-1 rounded-full text-sm">
-                {filteredTasks.filter((t) => t.status === status.id).length}
-              </span>
-            </h3>
+        {statuses.map((status) => {
+          const columnTasks = filteredTasks.filter((task) => task.status === status.id);
 
-            <div className="space-y-3">
-              {filteredTasks
-                .filter((t) => t.status === status.id)
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    draggable={!isLoading} // ← ДОБАВЛЕНО: Блокируем drag при загрузке
-                    onDragStart={(e) => handleDragStart(e, task)}
-                    className={`bg-white p-4 rounded-lg shadow-sm border-l-4 ${getPriorityColor(
-                      task.priority
-                    )} cursor-move hover:shadow-md transition-shadow ${
-                      isLoading ? 'opacity-50 cursor-not-allowed' : '' // ← ДОБАВЛЕНО: Затемняем при загрузке
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium text-gray-800">{task.title}</h4>
-                      <span
-                        className={`text-xs px-2 py-1 rounded-full ${
-                          task.priority === 'high'
-                            ? 'bg-red-100 text-red-800'
-                            : task.priority === 'medium'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-green-100 text-green-800'
-                        }`}
-                      >
-                        {task.priority === 'high'
-                          ? 'Высокий'
-                          : task.priority === 'medium'
-                          ? 'Средний'
-                          : 'Низкий'}
-                      </span>
-                    </div>
+          return (
+            <div
+              key={status.id}
+              className={`rounded-2xl p-4 ${status.color} min-h-[440px]`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, status.id)}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {status.icon} {status.title}
+                </h3>
+                <span className="bg-white text-slate-700 px-2 py-1 text-sm rounded-full">{columnTasks.length}</span>
+              </div>
 
-                    <p className="text-sm text-gray-600 mb-3">{task.description}</p>
-
-                    {/* Блок с дедлайном */}
-                    {task.deadline && (
-                      <div className={`mb-3 px-2 py-1 rounded text-xs border ${getDeadlineColor(task)}`}>
-                        <span className="mr-1">{getDeadlineIcon(task)}</span>
-                        <span className="font-medium">Дедлайн:</span>
-                        <span className="ml-1">{formatDeadline(task.deadline)}</span>
-                        {getDeadlineStatus(task) === 'danger' && task.status !== 'done' && (
-                          <span className="ml-1 font-bold">(ПРОСРОЧЕНО!)</span>
+              <div className="space-y-3">
+                {columnTasks.map((task) => {
+                  const unread = unreadByTask[task.id] ?? 0;
+                  return (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={(e) => setDraggedTask(task)}
+                      onClick={() => openTaskContext(task)}
+                      className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h4 className="font-semibold text-slate-900 leading-snug">{task.title}</h4>
+                        {unread > 0 && (
+                          <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">{unread}</span>
                         )}
                       </div>
-                    )}
 
-                    <div className="flex justify-between items-center text-xs text-gray-500">
-                      <div>
-                        <span>👤 {task.assignee}</span>
-                        {task.createdBy === user?.id && (
-                          <span className="ml-2 bg-blue-100 text-blue-800 px-1 rounded">
-                            моя
-                          </span>
-                        )}
+                      <p className="text-sm text-slate-600 mb-3 line-clamp-2">{task.description || 'Без описания'}</p>
+
+                      <div className="flex items-center gap-2 mb-3 flex-wrap text-xs">
+                        <span className={`px-2 py-1 rounded-full ${getPriorityClasses(task.priority)}`}>
+                          {getPriorityText(task.priority)}
+                        </span>
+                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                          Дедлайн: {formatDeadline(task.deadline)}
+                        </span>
+                        <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700">
+                          {getDeadlineStatus(task) === 'danger' ? 'Просрочено' : 'В срок'}
+                        </span>
                       </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => openEditModal(task)}
-                          className="text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                          disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="text-red-600 hover:text-red-800 disabled:opacity-50"
-                          disabled={isLoading} // ← ДОБАВЛЕНО: Блокируем при загрузке
-                        >
-                          🗑️
-                        </button>
+
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span>Исполнитель: {task.assignee}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingTask(task);
+                              setIsEditOpen(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Ред.
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTask(task.id);
+                            }}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            Удал.
+                          </button>
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+
+                {columnTasks.length === 0 && (
+                  <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center text-slate-400">
+                    Перетащите задачи сюда
                   </div>
-                ))}
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-              {filteredTasks.filter((t) => t.status === status.id).length === 0 && (
-                <div className="text-center text-gray-400 py-8 border-2 border-dashed border-gray-300 rounded-lg">
-                  {searchQuery ||
-                  filters.priority !== 'all' ||
-                  filters.status !== 'all' ||
-                  filters.assignee !== 'all'
-                    ? 'Задачи не найдены'
-                    : 'Перетащите задачи сюда'}
+      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 text-center">
+          <div className="text-2xl font-bold text-slate-900">{filteredStats.total}</div>
+          <div className="text-sm text-slate-600">Всего задач</div>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-200 text-center">
+          <div className="text-2xl font-bold text-amber-600">{filteredStats.todo}</div>
+          <div className="text-sm text-slate-600">К выполнению</div>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-200 text-center">
+          <div className="text-2xl font-bold text-blue-600">{filteredStats.inprogress}</div>
+          <div className="text-sm text-slate-600">В работе</div>
+        </div>
+        <div className="bg-white rounded-xl p-4 border border-slate-200 text-center">
+          <div className="text-2xl font-bold text-emerald-600">{filteredStats.done}</div>
+          <div className="text-sm text-slate-600">Выполнено</div>
+        </div>
+      </div>
+
+      {selectedTask && (
+        <div className="fixed top-0 right-0 h-full w-full sm:w-[520px] bg-white border-l border-slate-200 shadow-2xl z-50 flex flex-col">
+          <div className="p-5 border-b border-slate-200 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-blue-600 font-semibold">Задача = Чат</p>
+              <h3 className="text-xl font-bold text-slate-900">{selectedTask.title}</h3>
+              <div className="text-sm text-slate-600 mt-1 flex flex-wrap gap-2">
+                <span>Исполнитель: {selectedTask.assignee}</span>
+                <span>•</span>
+                <span>Дедлайн: {formatDeadline(selectedTask.deadline)}</span>
+                <span>•</span>
+                <span>Статус: {selectedTask.status}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedTaskId(null)}
+              className="text-slate-500 hover:text-slate-800 text-lg"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-slate-50">
+            {selectedChat.map((msg) => (
+              <div
+                key={msg.id}
+                className={`rounded-xl p-3 ${msg.kind === 'system' ? 'bg-blue-50 border border-blue-100' : 'bg-white border border-slate-200'}`}
+              >
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className={msg.kind === 'system' ? 'text-blue-700 font-semibold' : 'text-slate-700 font-semibold'}>
+                    {msg.author}
+                  </span>
+                  <span className="text-slate-500">{msg.createdAt}</span>
                 </div>
-              )}
+                <p className="text-sm text-slate-800">{msg.body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-slate-200 p-4">
+            <div className="flex items-end gap-2">
+              <textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Напишите сообщение по задаче..."
+                rows={2}
+                className="flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleSendMessage}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl"
+              >
+                Отправить
+              </button>
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Статистика */}
-      <div className="mt-8 grid grid-cols-4 gap-4 text-center">
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-gray-800">{filteredStats.total}</div>
-          <div className="text-sm text-gray-600">
-            {filteredStats.total === baseTasks.length ? 'Всего задач' : 'Найдено'}
-          </div>
         </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-orange-600">{filteredStats.todo}</div>
-          <div className="text-sm text-gray-600">К выполнению</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-blue-600">{filteredStats.inprogress}</div>
-          <div className="text-sm text-gray-600">В работе</div>
-        </div>
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <div className="text-2xl font-bold text-green-600">{filteredStats.done}</div>
-          <div className="text-sm text-gray-600">Выполнено</div>
-        </div>
-      </div>
-
-      {/* Подсказка */}
-      <div className="mt-4 text-center text-sm text-gray-500">
-        💡 Используйте поиск и фильтры для быстрого нахождения задач
-        {taskFilter === 'my' && ' • Показаны только задачи, созданные вами'}
-      </div>
+      )}
     </div>
   );
 }

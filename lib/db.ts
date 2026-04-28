@@ -1,25 +1,25 @@
-import sqlite3 from 'sqlite3';
+﻿import sqlite3 from 'sqlite3';
 import path from 'path';
 import bcrypt from 'bcryptjs';
 
-const dbPath = path.join(process.cwd(), 'bugtracker.db');
+const dbFile = process.env.DB_PATH || 'bugtracker.db';
+const dbPath = path.isAbsolute(dbFile) ? dbFile : path.join(process.cwd(), dbFile);
 
 class Database {
   private db: sqlite3.Database;
-  
+
   constructor() {
     this.db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error('Error opening database:', err);
       } else {
-        console.log('✅ Connected to SQLite database at:', dbPath);
+        console.log('Connected to SQLite database at:', dbPath);
         this.init();
       }
     });
   }
 
   private async init() {
-    // Create users table
     await this.run(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -32,7 +32,6 @@ class Database {
       )
     `);
 
-    // Create tasks table
     await this.run(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
@@ -49,25 +48,33 @@ class Database {
       )
     `);
 
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS task_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        taskId TEXT NOT NULL,
+        author TEXT NOT NULL,
+        body TEXT NOT NULL,
+        kind TEXT DEFAULT 'user',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     await this.insertDemoData();
   }
 
   private async insertDemoData() {
-    // Check if we already have users
     const result: any = await this.get('SELECT COUNT(*) as count FROM users', []);
-    
+
     if (result && result.count > 0) {
-      console.log('📊 Database already has users:', result.count);
+      console.log('Database already has users:', result.count);
       return;
     }
 
-    console.log('🔄 Inserting demo data...');
-    
-    // 🔥 ИСПРАВЛЕННЫЕ ХЕШИ ПАРОЛЕЙ - правильные для bcrypt
+    console.log('Inserting demo data...');
+
     const demoPassword = 'password123';
     const hashedPassword = await bcrypt.hash(demoPassword, 12);
-    
-    // Insert demo users with CORRECT hashed passwords
+
     const demoUsers = [
       {
         id: 'admin-1',
@@ -78,7 +85,7 @@ class Database {
       },
       {
         id: 'user-1',
-        email: 'user@bugtracker.com', 
+        email: 'user@bugtracker.com',
         name: 'Тестовый Пользователь',
         password: hashedPassword,
         role: 'user'
@@ -87,15 +94,14 @@ class Database {
 
     for (const user of demoUsers) {
       await this.run(
-        `INSERT INTO users (id, email, name, password, role) 
+        `INSERT INTO users (id, email, name, password, role)
          VALUES (?, ?, ?, ?, ?)`,
         [user.id, user.email, user.name, user.password, user.role]
       );
     }
 
-    console.log('✅ Demo users inserted with CORRECT password hashes');
+    console.log('Demo users inserted with hashed passwords');
 
-    // Insert demo tasks
     const demoTasks = [
       {
         id: 'task-1',
@@ -108,7 +114,7 @@ class Database {
         tags: JSON.stringify(['auth', 'critical'])
       },
       {
-        id: 'task-2', 
+        id: 'task-2',
         title: 'Добавить новые функции',
         description: 'Реализовать дополнительные возможности трекера',
         status: 'todo',
@@ -121,22 +127,21 @@ class Database {
 
     for (const task of demoTasks) {
       await this.run(
-        `INSERT INTO tasks (id, title, description, status, priority, assignee, reporter, tags) 
+        `INSERT INTO tasks (id, title, description, status, priority, assignee, reporter, tags)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [task.id, task.title, task.description, task.status, task.priority, 
-         task.assignee, task.reporter, task.tags]
+        [task.id, task.title, task.description, task.status, task.priority, task.assignee, task.reporter, task.tags]
       );
     }
 
-    console.log('✅ Demo data inserted successfully');
-    console.log('🔐 ДЛЯ ВХОДА ИСПОЛЬЗУЙ:');
-    console.log('   Админ: admin@bugtracker.com / password123');
-    console.log('   Пользователь: user@bugtracker.com / password123');
+    console.log('Demo data inserted successfully');
+    console.log('Для входа используйте:');
+    console.log('  Админ: admin@bugtracker.com / password123');
+    console.log('  Пользователь: user@bugtracker.com / password123');
   }
 
-  run(sql: string, params: any[] = []): Promise<{id?: number}> {
+  run(sql: string, params: any[] = []): Promise<{ id?: number }> {
     return new Promise((resolve, reject) => {
-      this.db.run(sql, params, function(err) {
+      this.db.run(sql, params, function (err) {
         if (err) reject(err);
         else resolve({ id: this.lastID });
       });

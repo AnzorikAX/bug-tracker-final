@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useNotifications } from "./useNotifications";
-console.log('📧 [DEBUG] process.env.NEXT_PUBLIC_EMAIL_ENABLED =', process.env.NEXT_PUBLIC_EMAIL_ENABLED);
+console.log('рџ“§ [DEBUG] process.env.NEXT_PUBLIC_EMAIL_ENABLED =', process.env.NEXT_PUBLIC_EMAIL_ENABLED);
 
-// Добавьте это после импортов
+// Р”РѕР±Р°РІСЊС‚Рµ СЌС‚Рѕ РїРѕСЃР»Рµ РёРјРїРѕСЂС‚РѕРІ
 type EmailType = 
   | 'task-created'
   | 'task-updated'
@@ -47,7 +47,7 @@ export function useTasks() {
   const [isInitialized, setIsInitialized] = useState(false);
   const { addNotification } = useNotifications();
 
-  // 🔄 Загружаем задачи из API при первом рендере
+  // рџ”„ Р—Р°РіСЂСѓР¶Р°РµРј Р·Р°РґР°С‡Рё РёР· API РїСЂРё РїРµСЂРІРѕРј СЂРµРЅРґРµСЂРµ
   useEffect(() => {
   if (!isInitialized) {
     loadTasksFromAPI();
@@ -55,27 +55,27 @@ export function useTasks() {
   }
 }, [isInitialized]);
 
-// 2. Второй useEffect - для localStorage
+// 2. Р’С‚РѕСЂРѕР№ useEffect - РґР»СЏ localStorage
 useEffect(() => {
   if (typeof window !== 'undefined' && isInitialized) {
     localStorage.setItem('bug-tracker-tasks', JSON.stringify(tasks));
   }
 }, [tasks, isInitialized]);
 
-// 3. Третий useEffect - для проверки дедлайнов (email)
+// 3. РўСЂРµС‚РёР№ useEffect - РґР»СЏ РїСЂРѕРІРµСЂРєРё РґРµРґР»Р°Р№РЅРѕРІ (email)
 useEffect(() => {
   if (typeof window !== 'undefined' && 
       process.env.NEXT_PUBLIC_EMAIL_ENABLED === 'true' && 
       isInitialized) {
-    console.log('⏰ Начинаем проверку дедлайнов...');
+    console.log('вЏ° РќР°С‡РёРЅР°РµРј РїСЂРѕРІРµСЂРєСѓ РґРµРґР»Р°Р№РЅРѕРІ...');
     checkDeadlines();
     
     const interval = setInterval(checkDeadlines, 30 * 60 * 1000);
     return () => clearInterval(interval);
   }
-}, [tasks, isInitialized]); // ← Эта строка правильная
+}, [tasks, isInitialized]); // в†ђ Р­С‚Р° СЃС‚СЂРѕРєР° РїСЂР°РІРёР»СЊРЅР°СЏ
 
-  // 🔄 API функции
+  // рџ”„ API С„СѓРЅРєС†РёРё
   const apiRequest = async (url: string, options: RequestInit = {}) => {
     try {
       const token = localStorage.getItem('bug-tracker-token');
@@ -100,21 +100,21 @@ useEffect(() => {
     }
   };
 
-  // 🔄 Загрузка задач с API
+  // рџ”„ Р—Р°РіСЂСѓР·РєР° Р·Р°РґР°С‡ СЃ API
   const loadTasksFromAPI = async (): Promise<Task[]> => {
     setIsLoading(true);
     try {
       const result = await apiRequest('/tasks');
       if (result.success && result.data) {
-        // Конвертируем API задачи в наш формат
+        // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј API Р·Р°РґР°С‡Рё РІ РЅР°С€ С„РѕСЂРјР°С‚
         const apiTasks: Task[] = result.data.map((apiTask: any) => {
-          // Конвертируем статус из API формата в наш формат
+          // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј СЃС‚Р°С‚СѓСЃ РёР· API С„РѕСЂРјР°С‚Р° РІ РЅР°С€ С„РѕСЂРјР°С‚
           let status: Task['status'] = 'todo';
           if (apiTask.status === 'in-progress') status = 'inprogress';
           else if (apiTask.status === 'done') status = 'done';
           else status = apiTask.status as Task['status'];
 
-          // Конвертируем ID из строки в число (берем только цифры)
+          // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј ID РёР· СЃС‚СЂРѕРєРё РІ С‡РёСЃР»Рѕ (Р±РµСЂРµРј С‚РѕР»СЊРєРѕ С†РёС„СЂС‹)
           const idMatch = apiTask.id.match(/\d+/);
           const id = idMatch ? parseInt(idMatch[0]) : Date.now();
 
@@ -124,7 +124,7 @@ useEffect(() => {
             description: apiTask.description || '',
             status: status,
             priority: apiTask.priority as Task['priority'],
-            assignee: apiTask.assigneeName || apiTask.assignee || 'Не назначен',
+            assignee: apiTask.assigneeName || apiTask.assignee || 'РќРµ РЅР°Р·РЅР°С‡РµРЅ',
             createdAt: new Date(apiTask.createdAt),
             updatedAt: new Date(apiTask.updatedAt),
             deadline: apiTask.dueDate ? new Date(apiTask.dueDate) : null
@@ -132,19 +132,19 @@ useEffect(() => {
         });
 
         setTasks(apiTasks);
-        console.log('✅ Загружено задач из API:', apiTasks.length);
+        console.log('вњ… Р—Р°РіСЂСѓР¶РµРЅРѕ Р·Р°РґР°С‡ РёР· API:', apiTasks.length);
         return apiTasks;
       }
     } catch (error) {
-      console.warn('⚠️ Не удалось загрузить задачи из API, используем локальные данные');
+      console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р·Р°РґР°С‡Рё РёР· API, РёСЃРїРѕР»СЊР·СѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ');
     } finally {
       setIsLoading(false);
     }
     return tasks;
   };
-// 🔥 НОВЫЕ ФУНКЦИИ ДЛЯ EMAIL ======================
+// рџ”Ґ РќРћР’Р«Р• Р¤РЈРќРљР¦РР Р”Р›РЇ EMAIL ======================
 
-// Функция для поиска пользователя по имени
+// Р¤СѓРЅРєС†РёСЏ РґР»СЏ РїРѕРёСЃРєР° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ РїРѕ РёРјРµРЅРё
 const findUserByUsername = async (username: string) => {
   try {
     const users = await fetch('/api/users').then(res => res.json());
@@ -155,82 +155,82 @@ const findUserByUsername = async (username: string) => {
   }
 };
 
-// Основная функция отправки email
+// РћСЃРЅРѕРІРЅР°СЏ С„СѓРЅРєС†РёСЏ РѕС‚РїСЂР°РІРєРё email
 const sendEmailNotification = async (type: EmailType, data: any, assigneeEmail?: string) => {
-  // ТОЛЬКО проверка на серверный рендеринг
+  // РўРћР›Р¬РљРћ РїСЂРѕРІРµСЂРєР° РЅР° СЃРµСЂРІРµСЂРЅС‹Р№ СЂРµРЅРґРµСЂРёРЅРі
   if (typeof window === 'undefined') {
-    console.log(`📧 Server-side, skipping`);
+    console.log(`рџ“§ Server-side, skipping`);
     return null;
   }
 
-  // 🔥 ИСПРАВЛЕННАЯ ГЕНЕРАЦИЯ EMAIL ===================
+  // рџ”Ґ РРЎРџР РђР’Р›Р•РќРќРђРЇ Р“Р•РќР•Р РђР¦РРЇ EMAIL ===================
   
-  // Сначала проверяем пропуск некорректных имен
-  const skipNames = ['Главный Администратор', 'Не назначен', '', null, undefined];
+  // РЎРЅР°С‡Р°Р»Р° РїСЂРѕРІРµСЂСЏРµРј РїСЂРѕРїСѓСЃРє РЅРµРєРѕСЂСЂРµРєС‚РЅС‹С… РёРјРµРЅ
+  const skipNames = ['Р“Р»Р°РІРЅС‹Р№ РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ', 'РќРµ РЅР°Р·РЅР°С‡РµРЅ', '', null, undefined];
   if (skipNames.includes(data.assignee)) {
-    console.log(`📧 Пропускаем email для '${data.assignee}'`);
+    console.log(`рџ“§ РџСЂРѕРїСѓСЃРєР°РµРј email РґР»СЏ '${data.assignee}'`);
     return null;
   }
 
-  // Функция для получения фиксированного email
+  // Р¤СѓРЅРєС†РёСЏ РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ С„РёРєСЃРёСЂРѕРІР°РЅРЅРѕРіРѕ email
   const getFixedEmail = (name: string) => {
     const emailMap: Record<string, string> = {
-      'Главный Администратор': 'admin@ethereal.email',
-      'Иван Иванов': 'ivan.ivanov@ethereal.email',
-      'Петр Петров': 'petr.petrov@ethereal.email',
-      'Мария Сидорова': 'maria.sidorova@ethereal.email',
-      'Алексей Алексеев': 'alexey.alexeev@ethereal.email',
-      'Новый пользователь': 'new.user@ethereal.email',
-      'Тестовый пользователь': 'test.user@ethereal.email'
+      'Р“Р»Р°РІРЅС‹Р№ РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ': 'admin@ethereal.email',
+      'РРІР°РЅ РРІР°РЅРѕРІ': 'ivan.ivanov@ethereal.email',
+      'РџРµС‚СЂ РџРµС‚СЂРѕРІ': 'petr.petrov@ethereal.email',
+      'РњР°СЂРёСЏ РЎРёРґРѕСЂРѕРІР°': 'maria.sidorova@ethereal.email',
+      'РђР»РµРєСЃРµР№ РђР»РµРєСЃРµРµРІ': 'alexey.alexeev@ethereal.email',
+      'РќРѕРІС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ': 'new.user@ethereal.email',
+      'РўРµСЃС‚РѕРІС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ': 'test.user@ethereal.email'
     };
     
     return emailMap[name] || 'user@ethereal.email';
   };
 
-  // Генерация email
+  // Р“РµРЅРµСЂР°С†РёСЏ email
   let emailToSend = assigneeEmail;
   
-  // Если нет email или это не email
+  // Р•СЃР»Рё РЅРµС‚ email РёР»Рё СЌС‚Рѕ РЅРµ email
   if (!emailToSend || !emailToSend.includes('@')) {
-    // Используем фиксированный email
+    // РСЃРїРѕР»СЊР·СѓРµРј С„РёРєСЃРёСЂРѕРІР°РЅРЅС‹Р№ email
     emailToSend = getFixedEmail(data.assignee || 'user');
-    console.log(`📧 Фиксированный email для '${data.assignee}': ${emailToSend}`);
+    console.log(`рџ“§ Р¤РёРєСЃРёСЂРѕРІР°РЅРЅС‹Р№ email РґР»СЏ '${data.assignee}': ${emailToSend}`);
   }
 
-  // Дополнительная проверка
+  // Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ РїСЂРѕРІРµСЂРєР°
   if (!emailToSend || !emailToSend.includes('@')) {
-    console.error(`❌ Некорректный email: ${emailToSend}, skipping`);
+    console.error(`вќЊ РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ email: ${emailToSend}, skipping`);
     return null;
   }
 
   // ===================================================
 
   try {
-    console.log(`📧 [${type}] Отправляем на: ${emailToSend}`);
-    console.log(`📧 Данные:`, data);
+    console.log(`рџ“§ [${type}] РћС‚РїСЂР°РІР»СЏРµРј РЅР°: ${emailToSend}`);
+    console.log(`рџ“§ Р”Р°РЅРЅС‹Рµ:`, data);
     
-    // 📦 СТАРЫЙ ФОРМАТ для совместимости с API
+    // рџ“¦ РЎРўРђР Р«Р™ Р¤РћР РњРђРў РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё СЃ API
     const requestBody = {
   to: emailToSend,
   type: type, // 'task-created', 'task-updated', etc.
   data: {
     taskId: data.taskId || `task-${Date.now()}`,
-    taskTitle: data.taskTitle || data.title || 'Задача без названия',
+    taskTitle: data.taskTitle || data.title || 'Р—Р°РґР°С‡Р° Р±РµР· РЅР°Р·РІР°РЅРёСЏ',
     taskDescription: data.taskDescription || data.description || '',
     priority: data.priority || 'medium',
-    assignee: assigneeName,
+    assignee: data.assignee || 'Не назначен',
     status: data.status || 'todo',
     deadline: data.deadline,
-    // Дополнительные поля для совместимости
+    // Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рµ РїРѕР»СЏ РґР»СЏ СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚Рё
     id: data.taskId || `task-${Date.now()}`,
-    title: data.taskTitle || data.title || 'Задача без названия',
+    title: data.taskTitle || data.title || 'Р—Р°РґР°С‡Р° Р±РµР· РЅР°Р·РІР°РЅРёСЏ',
     description: data.taskDescription || data.description || '',
     appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     updatedBy: 'system'
   }
 };
 
-    console.log('📧 Отправляемые данные (старый формат):', requestBody);
+    console.log('рџ“§ РћС‚РїСЂР°РІР»СЏРµРјС‹Рµ РґР°РЅРЅС‹Рµ (СЃС‚Р°СЂС‹Р№ С„РѕСЂРјР°С‚):', requestBody);
     
     const response = await fetch('/api/email/send', {
       method: 'POST',
@@ -243,11 +243,11 @@ const sendEmailNotification = async (type: EmailType, data: any, assigneeEmail?:
     }
 
     const result = await response.json();
-    console.log(`✅ Email (${type}) отправлен:`, result.messageId);
+    console.log(`вњ… Email (${type}) РѕС‚РїСЂР°РІР»РµРЅ:`, result.messageId);
     
     if (result.previewUrl) {
-      console.log(`👀 Preview: ${result.previewUrl}`);
-      // Автоматически открываем в новой вкладке для тестирования
+      console.log(`рџ‘Ђ Preview: ${result.previewUrl}`);
+      // РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРё РѕС‚РєСЂС‹РІР°РµРј РІ РЅРѕРІРѕР№ РІРєР»Р°РґРєРµ РґР»СЏ С‚РµСЃС‚РёСЂРѕРІР°РЅРёСЏ
       if (type === 'test' || type === 'task-created') {
         window.open(result.previewUrl, '_blank');
       }
@@ -255,12 +255,12 @@ const sendEmailNotification = async (type: EmailType, data: any, assigneeEmail?:
     
     return result;
   } catch (error) {
-    console.error(`❌ Ошибка отправки email (${type}):`, error);
+    console.error(`вќЊ РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё email (${type}):`, error);
     return null;
   }
 };
 
-// Функция для проверки дедлайнов
+// Р¤СѓРЅРєС†РёСЏ РґР»СЏ РїСЂРѕРІРµСЂРєРё РґРµРґР»Р°Р№РЅРѕРІ
 const checkDeadlines = async () => {
   if (process.env.NEXT_PUBLIC_EMAIL_ENABLED !== 'true') {
     return;
@@ -274,7 +274,7 @@ const checkDeadlines = async () => {
 
     const deadline = new Date(task.deadline);
     
-    // Проверка "скоро дедлайн" (менее 24 часов)
+    // РџСЂРѕРІРµСЂРєР° "СЃРєРѕСЂРѕ РґРµРґР»Р°Р№РЅ" (РјРµРЅРµРµ 24 С‡Р°СЃРѕРІ)
     if (deadline > now && deadline <= in24Hours) {
       await sendEmailNotification('deadline-soon', {
         taskId: task.id,
@@ -284,14 +284,14 @@ const checkDeadlines = async () => {
       }, task.assignee);
     }
 
-    // Проверка просроченных задач
-    if (deadline < now && task.status !== 'done') {
+    // РџСЂРѕРІРµСЂРєР° РїСЂРѕСЃСЂРѕС‡РµРЅРЅС‹С… Р·Р°РґР°С‡
+    if (deadline < now) {
       const overdueDays = Math.floor((now.getTime() - deadline.getTime()) / (1000 * 60 * 60 * 24));
       await sendEmailNotification('task-overdue', {
         taskId: task.id,
         taskTitle: task.title,
         deadline: task.deadline,
-        overdueBy: `${overdueDays} дней`,
+        overdueBy: `${overdueDays} РґРЅРµР№`,
         assignee: task.assignee
       }, task.assignee);
     }
@@ -299,7 +299,7 @@ const checkDeadlines = async () => {
 };
 
 
-  // ✅ Создание задачи (dual-write)
+  // вњ… РЎРѕР·РґР°РЅРёРµ Р·Р°РґР°С‡Рё (dual-write)
 const createTask = async (
   taskData: Omit<Task, "id" | "createdAt" | "updatedAt">,
   userId: string
@@ -313,37 +313,37 @@ const createTask = async (
     createdBy: userId,
   };
 
-  console.log('🔄 Создание задачи:', newTask);
-  console.log('📌 Assignee для email:', taskData.assignee);
+  console.log('рџ”„ РЎРѕР·РґР°РЅРёРµ Р·Р°РґР°С‡Рё:', newTask);
+  console.log('рџ“Њ Assignee РґР»СЏ email:', taskData.assignee);
 
-  // 🔥 EMAIL: Отправляем улучшенное уведомление
-  console.log('🔍 Проверка окружения:');
-  console.log('  - window доступен:', typeof window !== 'undefined');
+  // рџ”Ґ EMAIL: РћС‚РїСЂР°РІР»СЏРµРј СѓР»СѓС‡С€РµРЅРЅРѕРµ СѓРІРµРґРѕРјР»РµРЅРёРµ
+  console.log('рџ”Ќ РџСЂРѕРІРµСЂРєР° РѕРєСЂСѓР¶РµРЅРёСЏ:');
+  console.log('  - window РґРѕСЃС‚СѓРїРµРЅ:', typeof window !== 'undefined');
   console.log('  - EMAIL_ENABLED:', process.env.NEXT_PUBLIC_EMAIL_ENABLED);
-  console.log('  - Режим:', process.env.NODE_ENV);
+  console.log('  - Р РµР¶РёРј:', process.env.NODE_ENV);
 
   if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_EMAIL_ENABLED === 'true') {
-    console.log('=== 📧 ОТПРАВКА EMAIL (НОВАЯ ВЕРСИЯ) ===');
+    console.log('=== рџ“§ РћРўРџР РђР’РљРђ EMAIL (РќРћР’РђРЇ Р’Р•Р РЎРРЇ) ===');
     
-    // 🔧 ИСПРАВЛЕННАЯ ГЕНЕРАЦИЯ EMAIL
+    // рџ”§ РРЎРџР РђР’Р›Р•РќРќРђРЇ Р“Р•РќР•Р РђР¦РРЇ EMAIL
     const getFixedEmailForAssignee = (assigneeName: string) => {
       const emailMap: Record<string, string> = {
-        'Тестовый пользователь': 'test.user@ethereal.email',
-        'Новый пользователь': 'new.user@ethereal.email',
-        'Иван Иванов': 'ivan.ivanov@ethereal.email',
-        'Петр Петров': 'petr.petrov@ethereal.email',
-        'Мария Сидорова': 'maria.sidorova@ethereal.email',
-        'Алексей Алексеев': 'alexey.alexeev@ethereal.email',
-        'Администратор': 'admin@ethereal.email',
-        'Главный Администратор': 'admin@ethereal.email'
+        'РўРµСЃС‚РѕРІС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ': 'test.user@ethereal.email',
+        'РќРѕРІС‹Р№ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ': 'new.user@ethereal.email',
+        'РРІР°РЅ РРІР°РЅРѕРІ': 'ivan.ivanov@ethereal.email',
+        'РџРµС‚СЂ РџРµС‚СЂРѕРІ': 'petr.petrov@ethereal.email',
+        'РњР°СЂРёСЏ РЎРёРґРѕСЂРѕРІР°': 'maria.sidorova@ethereal.email',
+        'РђР»РµРєСЃРµР№ РђР»РµРєСЃРµРµРІ': 'alexey.alexeev@ethereal.email',
+        'РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ': 'admin@ethereal.email',
+        'Р“Р»Р°РІРЅС‹Р№ РђРґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂ': 'admin@ethereal.email'
       };
       
-      // Ищем точное совпадение
+      // РС‰РµРј С‚РѕС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ
       if (emailMap[assigneeName]) {
         return emailMap[assigneeName];
       }
       
-      // Ищем частичное совпадение (без учета регистра)
+      // РС‰РµРј С‡Р°СЃС‚РёС‡РЅРѕРµ СЃРѕРІРїР°РґРµРЅРёРµ (Р±РµР· СѓС‡РµС‚Р° СЂРµРіРёСЃС‚СЂР°)
       const lowerAssignee = assigneeName.toLowerCase();
       for (const [key, value] of Object.entries(emailMap)) {
         if (key.toLowerCase().includes(lowerAssignee) || 
@@ -352,18 +352,18 @@ const createTask = async (
         }
       }
       
-      // Fallback: простой email из имени
+      // Fallback: РїСЂРѕСЃС‚РѕР№ email РёР· РёРјРµРЅРё
       return `${assigneeName.toLowerCase()
         .replace(/\s+/g, '.')
-        .replace(/[^a-zа-яё0-9.]/g, '') // Разрешаем кириллицу
-        .replace(/[а-яё]/g, char => {
-          // Простая транслитерация для кириллицы
+        .replace(/[^a-zР°-СЏС‘0-9.]/g, '') // Р Р°Р·СЂРµС€Р°РµРј РєРёСЂРёР»Р»РёС†Сѓ
+        .replace(/[Р°-СЏС‘]/g, char => {
+          // РџСЂРѕСЃС‚Р°СЏ С‚СЂР°РЅСЃР»РёС‚РµСЂР°С†РёСЏ РґР»СЏ РєРёСЂРёР»Р»РёС†С‹
           const map: Record<string, string> = {
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-            'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-            'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-            'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-            'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+            'Р°': 'a', 'Р±': 'b', 'РІ': 'v', 'Рі': 'g', 'Рґ': 'd', 'Рµ': 'e', 'С‘': 'yo',
+            'Р¶': 'zh', 'Р·': 'z', 'Рё': 'i', 'Р№': 'y', 'Рє': 'k', 'Р»': 'l', 'Рј': 'm',
+            'РЅ': 'n', 'Рѕ': 'o', 'Рї': 'p', 'СЂ': 'r', 'СЃ': 's', 'С‚': 't', 'Сѓ': 'u',
+            'С„': 'f', 'С…': 'h', 'С†': 'ts', 'С‡': 'ch', 'С€': 'sh', 'С‰': 'sch',
+            'СЉ': '', 'С‹': 'y', 'СЊ': '', 'СЌ': 'e', 'СЋ': 'yu', 'СЏ': 'ya'
           };
           return map[char] || '';
         })
@@ -371,17 +371,17 @@ const createTask = async (
         .replace(/^\.|\.$/g, '')}@ethereal.email`;
     };
 
-    // Получаем email
+    // РџРѕР»СѓС‡Р°РµРј email
     const assigneeEmail = getFixedEmailForAssignee(taskData.assignee || 'user');
-    console.log(`📧 Email для '${taskData.assignee}': ${assigneeEmail}`);
+    console.log(`рџ“§ Email РґР»СЏ '${taskData.assignee}': ${assigneeEmail}`);
 
-    // Проверяем валидность email перед отправкой
+    // РџСЂРѕРІРµСЂСЏРµРј РІР°Р»РёРґРЅРѕСЃС‚СЊ email РїРµСЂРµРґ РѕС‚РїСЂР°РІРєРѕР№
     if (!assigneeEmail || !assigneeEmail.includes('@') || assigneeEmail === '.@ethereal.email') {
-      console.warn('⚠️ Некорректный email, пропускаем отправку');
+      console.warn('вљ пёЏ РќРµРєРѕСЂСЂРµРєС‚РЅС‹Р№ email, РїСЂРѕРїСѓСЃРєР°РµРј РѕС‚РїСЂР°РІРєСѓ');
     } else {
-      console.log(`📧 Отправляем 'task-created' на: ${assigneeEmail}`);
+      console.log(`рџ“§ РћС‚РїСЂР°РІР»СЏРµРј 'task-created' РЅР°: ${assigneeEmail}`);
       
-      // Асинхронно отправляем, но не ждем
+      // РђСЃРёРЅС…СЂРѕРЅРЅРѕ РѕС‚РїСЂР°РІР»СЏРµРј, РЅРѕ РЅРµ Р¶РґРµРј
       sendEmailNotification('task-created', {
         taskId: taskId,
         taskTitle: taskData.title,
@@ -392,26 +392,26 @@ const createTask = async (
         status: taskData.status || 'todo'
       }, assigneeEmail).then(result => {
         if (result) {
-          console.log('✅ Email отправлен успешно');
-          console.log('👀 Preview:', result.previewUrl);
+          console.log('вњ… Email РѕС‚РїСЂР°РІР»РµРЅ СѓСЃРїРµС€РЅРѕ');
+          console.log('рџ‘Ђ Preview:', result.previewUrl);
           if (result.previewUrl) {
             window.open(result.previewUrl, '_blank');
           }
         }
       }).catch(err => {
-        console.error('❌ Ошибка при отправке email:', err);
+        console.error('вќЊ РћС€РёР±РєР° РїСЂРё РѕС‚РїСЂР°РІРєРµ email:', err);
       });
-    } // ← Закрываем else блока проверки email
+    } // в†ђ Р—Р°РєСЂС‹РІР°РµРј else Р±Р»РѕРєР° РїСЂРѕРІРµСЂРєРё email
     
-  } else { // ← Это else для ПЕРВОГО if (проверка window и EMAIL_ENABLED)
-    console.log('📧 Email отправка отключена или серверный рендеринг');
+  } else { // в†ђ Р­С‚Рѕ else РґР»СЏ РџР•Р Р’РћР“Рћ if (РїСЂРѕРІРµСЂРєР° window Рё EMAIL_ENABLED)
+    console.log('рџ“§ Email РѕС‚РїСЂР°РІРєР° РѕС‚РєР»СЋС‡РµРЅР° РёР»Рё СЃРµСЂРІРµСЂРЅС‹Р№ СЂРµРЅРґРµСЂРёРЅРі');
   }
 
-  // 1. Локальное обновление (мгновенно)
+  // 1. Р›РѕРєР°Р»СЊРЅРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ (РјРіРЅРѕРІРµРЅРЅРѕ)
   setTasks((prev) => [...prev, newTask]);
   addNotification(`Создана новая задача: ${taskData.title}`, "task");
 
-  // 2. API обновление (асинхронно)
+  // 2. API РѕР±РЅРѕРІР»РµРЅРёРµ (Р°СЃРёРЅС…СЂРѕРЅРЅРѕ)
   try {
     await apiRequest('/tasks', {
       method: 'POST',
@@ -424,47 +424,47 @@ const createTask = async (
         tags: ['bug-tracker']
       })
     });
-    console.log('✅ Задача синхронизирована с API');
+    console.log('вњ… Р—Р°РґР°С‡Р° СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅР° СЃ API');
     
-    // 3. После успешного создания в API, обновляем локальное состояние с данными из API
+    // 3. РџРѕСЃР»Рµ СѓСЃРїРµС€РЅРѕРіРѕ СЃРѕР·РґР°РЅРёСЏ РІ API, РѕР±РЅРѕРІР»СЏРµРј Р»РѕРєР°Р»СЊРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ СЃ РґР°РЅРЅС‹РјРё РёР· API
     setTimeout(async () => {
       try {
         const updatedTasks = await loadTasksFromAPI();
-        console.log('✅ Локальное состояние обновлено из API');
+        console.log('вњ… Р›РѕРєР°Р»СЊРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ РѕР±РЅРѕРІР»РµРЅРѕ РёР· API');
         
-        // Находим нашу новую задачу в обновленном списке
+        // РќР°С…РѕРґРёРј РЅР°С€Сѓ РЅРѕРІСѓСЋ Р·Р°РґР°С‡Сѓ РІ РѕР±РЅРѕРІР»РµРЅРЅРѕРј СЃРїРёСЃРєРµ
         const foundTask = updatedTasks.find(task => 
           task.title === newTask.title && 
           task.description === newTask.description
         );
         
         if (foundTask) {
-          console.log('✅ Новая задача найдена в API:', foundTask.id);
+          console.log('вњ… РќРѕРІР°СЏ Р·Р°РґР°С‡Р° РЅР°Р№РґРµРЅР° РІ API:', foundTask.id);
         }
       } catch (error) {
-        console.warn('⚠️ Не удалось обновить из API, но задача сохранена локально');
+        console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ РѕР±РЅРѕРІРёС‚СЊ РёР· API, РЅРѕ Р·Р°РґР°С‡Р° СЃРѕС…СЂР°РЅРµРЅР° Р»РѕРєР°Р»СЊРЅРѕ');
       }
     }, 1000);
     
   } catch (error) {
-    console.warn('⚠️ Не удалось синхронизировать задачу с API, сохраняем локально');
+    console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ Р·Р°РґР°С‡Сѓ СЃ API, СЃРѕС…СЂР°РЅСЏРµРј Р»РѕРєР°Р»СЊРЅРѕ');
   }
 
   return newTask;
 };
 
-  // ✅ Обновление задачи (dual-write)
+  // вњ… РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґР°С‡Рё (dual-write)
   const updateTask = async (id: number, updatedFields: Partial<Task>) => {
     const taskToUpdate = tasks.find(t => t.id === id);
     
     if (!taskToUpdate) {
-      console.warn('❌ Задача не найдена:', id);
+      console.warn('вќЊ Р—Р°РґР°С‡Р° РЅРµ РЅР°Р№РґРµРЅР°:', id);
       return;
     }
 
-    console.log('🔄 Обновление задачи:', id, updatedFields);
+    console.log('рџ”„ РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґР°С‡Рё:', id, updatedFields);
 
-    // 1. Локальное обновление (мгновенно)
+    // 1. Р›РѕРєР°Р»СЊРЅРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ (РјРіРЅРѕРІРµРЅРЅРѕ)
     setTasks((prev) =>
       prev.map((task) =>
         task.id === id ? { ...task, ...updatedFields, updatedAt: new Date() } : task
@@ -473,9 +473,9 @@ const createTask = async (
 
     addNotification(`Задача обновлена: ${taskToUpdate.title}`, "task");
 
-    // 2. API обновление (асинхронно)
+    // 2. API РѕР±РЅРѕРІР»РµРЅРёРµ (Р°СЃРёРЅС…СЂРѕРЅРЅРѕ)
     try {
-      // Конвертируем статус обратно в API формат
+      // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј СЃС‚Р°С‚СѓСЃ РѕР±СЂР°С‚РЅРѕ РІ API С„РѕСЂРјР°С‚
       const apiStatus = updatedFields.status === 'inprogress' ? 'in-progress' : updatedFields.status;
 
       await apiRequest(`/tasks/task-${id}`, {
@@ -489,12 +489,12 @@ const createTask = async (
           dueDate: updatedFields.deadline?.toISOString()
         })
       });
-      console.log('✅ Обновление задачи синхронизировано с API');
+      console.log('вњ… РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґР°С‡Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРѕ СЃ API');
     } catch (error) {
-      console.warn('⚠️ Не удалось синхронизировать обновление с API, сохраняем локально');
+      console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ РѕР±РЅРѕРІР»РµРЅРёРµ СЃ API, СЃРѕС…СЂР°РЅСЏРµРј Р»РѕРєР°Р»СЊРЅРѕ');
     }
   };
-  // ✅ Обновление задачи с email уведомлениями
+  // вњ… РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґР°С‡Рё СЃ email СѓРІРµРґРѕРјР»РµРЅРёСЏРјРё
 const updateTaskWithNotification = async (
   id: number, 
   updatedFields: Partial<Task>, 
@@ -503,13 +503,13 @@ const updateTaskWithNotification = async (
   const taskToUpdate = tasks.find(t => t.id === id);
   
   if (!taskToUpdate) {
-    console.warn('❌ Задача не найдена:', id);
+    console.warn('вќЊ Р—Р°РґР°С‡Р° РЅРµ РЅР°Р№РґРµРЅР°:', id);
     return;
   }
 
-  console.log('🔄 Обновление задачи с уведомлением:', id, updatedFields);
+  console.log('рџ”„ РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґР°С‡Рё СЃ СѓРІРµРґРѕРјР»РµРЅРёРµРј:', id, updatedFields);
 
-  // Проверяем изменения для email уведомления
+  // РџСЂРѕРІРµСЂСЏРµРј РёР·РјРµРЅРµРЅРёСЏ РґР»СЏ email СѓРІРµРґРѕРјР»РµРЅРёСЏ
   const changes = {
     status: updatedFields.status !== taskToUpdate.status ? 
       { old: taskToUpdate.status, new: updatedFields.status } : null,
@@ -519,7 +519,7 @@ const updateTaskWithNotification = async (
       { old: taskToUpdate.assignee, new: updatedFields.assignee } : null
   };
 
-  // 1. Локальное обновление (мгновенно)
+  // 1. Р›РѕРєР°Р»СЊРЅРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ (РјРіРЅРѕРІРµРЅРЅРѕ)
   setTasks((prev) =>
     prev.map((task) =>
       task.id === id ? { ...task, ...updatedFields, updatedAt: new Date() } : task
@@ -528,17 +528,17 @@ const updateTaskWithNotification = async (
 
   addNotification(`Задача обновлена: ${taskToUpdate.title}`, "task");
 
-  // 2. Отправляем email если есть изменения
+  // 2. РћС‚РїСЂР°РІР»СЏРµРј email РµСЃР»Рё РµСЃС‚СЊ РёР·РјРµРЅРµРЅРёСЏ
   const hasChanges = Object.values(changes).some(change => change !== null);
   
   if (hasChanges && process.env.NEXT_PUBLIC_EMAIL_ENABLED === 'true') {
-    // Определяем тип email
+    // РћРїСЂРµРґРµР»СЏРµРј С‚РёРї email
     let emailType: EmailType = 'task-updated';
     if (updatedFields.status === 'done' && taskToUpdate.status !== 'done') {
       emailType = 'task-completed';
     }
 
-    // Определяем получателя
+    // РћРїСЂРµРґРµР»СЏРµРј РїРѕР»СѓС‡Р°С‚РµР»СЏ
     const recipient = updatedFields.assignee || taskToUpdate.assignee;
     
     if (recipient) {
@@ -561,7 +561,7 @@ const updateTaskWithNotification = async (
     }
   }
 
-  // 3. API обновление (асинхронно)
+  // 3. API РѕР±РЅРѕРІР»РµРЅРёРµ (Р°СЃРёРЅС…СЂРѕРЅРЅРѕ)
   try {
     const apiStatus = updatedFields.status === 'inprogress' ? 'in-progress' : updatedFields.status;
 
@@ -576,43 +576,43 @@ const updateTaskWithNotification = async (
         dueDate: updatedFields.deadline?.toISOString()
       })
     });
-    console.log('✅ Обновление задачи синхронизировано с API');
+    console.log('вњ… РћР±РЅРѕРІР»РµРЅРёРµ Р·Р°РґР°С‡Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРѕ СЃ API');
   } catch (error) {
-    console.warn('⚠️ Не удалось синхронизировать обновление с API, сохраняем локально');
+    console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ РѕР±РЅРѕРІР»РµРЅРёРµ СЃ API, СЃРѕС…СЂР°РЅСЏРµРј Р»РѕРєР°Р»СЊРЅРѕ');
   }
 };
 
-  // ✅ Удаление задачи (dual-write)
+  // вњ… РЈРґР°Р»РµРЅРёРµ Р·Р°РґР°С‡Рё (dual-write)
   const deleteTask = async (id: number) => {
     const deletedTask = tasks.find((t) => t.id === id);
     
-    console.log('🔄 Удаление задачи:', id);
+    console.log('рџ”„ РЈРґР°Р»РµРЅРёРµ Р·Р°РґР°С‡Рё:', id);
 
-    // 1. Локальное удаление (мгновенно)
+    // 1. Р›РѕРєР°Р»СЊРЅРѕРµ СѓРґР°Р»РµРЅРёРµ (РјРіРЅРѕРІРµРЅРЅРѕ)
     setTasks((prev) => prev.filter((task) => task.id !== id));
 
     if (deletedTask) {
       addNotification(`Задача удалена: ${deletedTask.title}`, "task");
     }
 
-    // 2. API удаление (асинхронно)
+    // 2. API СѓРґР°Р»РµРЅРёРµ (Р°СЃРёРЅС…СЂРѕРЅРЅРѕ)
     try {
       await apiRequest(`/tasks/task-${id}`, {
         method: 'DELETE'
       });
-      console.log('✅ Удаление задачи синхронизировано с API');
+      console.log('вњ… РЈРґР°Р»РµРЅРёРµ Р·Р°РґР°С‡Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРѕ СЃ API');
     } catch (error) {
-      console.warn('⚠️ Не удалось синхронизировать удаление с API, удаляем локально');
+      console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ СѓРґР°Р»РµРЅРёРµ СЃ API, СѓРґР°Р»СЏРµРј Р»РѕРєР°Р»СЊРЅРѕ');
     }
   };
 
-  // ✅ Перемещение задачи (dual-write)
+  // вњ… РџРµСЂРµРјРµС‰РµРЅРёРµ Р·Р°РґР°С‡Рё (dual-write)
   const moveTask = async (id: number, newStatus: Task["status"]) => {
     const movedTask = tasks.find((t) => t.id === id);
     
-    console.log('🔄 Перемещение задачи:', id, newStatus);
+    console.log('рџ”„ РџРµСЂРµРјРµС‰РµРЅРёРµ Р·Р°РґР°С‡Рё:', id, newStatus);
 
-    // 1. Локальное обновление (мгновенно)
+    // 1. Р›РѕРєР°Р»СЊРЅРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ (РјРіРЅРѕРІРµРЅРЅРѕ)
     setTasks((prev) =>
       prev.map((task) =>
         task.id === id ? { ...task, status: newStatus, updatedAt: new Date() } : task
@@ -623,9 +623,9 @@ const updateTaskWithNotification = async (
       addNotification(`Задача перемещена: ${movedTask.title}`, "task");
     }
 
-    // 2. API обновление (асинхронно)
+    // 2. API РѕР±РЅРѕРІР»РµРЅРёРµ (Р°СЃРёРЅС…СЂРѕРЅРЅРѕ)
     try {
-      // Конвертируем статус обратно в API формат
+      // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј СЃС‚Р°С‚СѓСЃ РѕР±СЂР°С‚РЅРѕ РІ API С„РѕСЂРјР°С‚
       const apiStatus = newStatus === 'inprogress' ? 'in-progress' : newStatus;
 
       await apiRequest(`/tasks/task-${id}`, {
@@ -634,13 +634,13 @@ const updateTaskWithNotification = async (
           status: apiStatus
         })
       });
-      console.log('✅ Перемещение задачи синхронизировано с API');
+      console.log('вњ… РџРµСЂРµРјРµС‰РµРЅРёРµ Р·Р°РґР°С‡Рё СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРѕ СЃ API');
     } catch (error) {
-      console.warn('⚠️ Не удалось синхронизировать перемещение с API, сохраняем локально');
+      console.warn('вљ пёЏ РќРµ СѓРґР°Р»РѕСЃСЊ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ РїРµСЂРµРјРµС‰РµРЅРёРµ СЃ API, СЃРѕС…СЂР°РЅСЏРµРј Р»РѕРєР°Р»СЊРЅРѕ');
     }
   };
 
-  // ✅ Статистика
+  // вњ… РЎС‚Р°С‚РёСЃС‚РёРєР°
   const getStats = () => {
     const now = new Date();
     const highPriority = tasks.filter(t => t.priority === 'high').length;
@@ -668,7 +668,7 @@ const updateTaskWithNotification = async (
     };
   };
 
-  // ✅ Фильтрация задач
+  // вњ… Р¤РёР»СЊС‚СЂР°С†РёСЏ Р·Р°РґР°С‡
   const getFilteredTasks = (
     filters: { 
       query?: string; 
@@ -728,12 +728,12 @@ const updateTaskWithNotification = async (
     });
   };
 
-  // ✅ Задачи конкретного пользователя
+  // вњ… Р—Р°РґР°С‡Рё РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
   const getUserTasks = (userId: string) => {
     return tasks.filter((t) => t.createdBy === userId || t.assignee === String(userId));
   };
 
-  // ✅ Статистика конкретного пользователя
+  // вњ… РЎС‚Р°С‚РёСЃС‚РёРєР° РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
   const getUserStats = (userId: string) => {
     const userTasks = getUserTasks(userId);
     const now = new Date();
@@ -748,13 +748,13 @@ const updateTaskWithNotification = async (
     };
   };
 
-  // ✅ Очистка всех задач
+  // вњ… РћС‡РёСЃС‚РєР° РІСЃРµС… Р·Р°РґР°С‡
   const clearAllTasks = () => {
     setTasks([]);
     addNotification('Все задачи были очищены', 'system');
   };
 
-  // ✅ Восстановление демо-данных
+  // вњ… Р’РѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёРµ РґРµРјРѕ-РґР°РЅРЅС‹С…
   const restoreDemoData = () => {
     const demoTasks: Task[] = [
       {
@@ -807,7 +807,7 @@ const updateTaskWithNotification = async (
     addNotification('Демо-данные восстановлены', 'system');
   };
 
-  // ✅ Экспорт задач
+  // вњ… Р­РєСЃРїРѕСЂС‚ Р·Р°РґР°С‡
   const exportTasks = () => {
     const dataStr = JSON.stringify(tasks, null, 2);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
@@ -822,7 +822,7 @@ const updateTaskWithNotification = async (
     addNotification('Данные экспортированы', 'system');
   };
 
-  // ✅ Вспомогательная функция для проверки дедлайна
+  // вњ… Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ РїСЂРѕРІРµСЂРєРё РґРµРґР»Р°Р№РЅР°
   const getDeadlineStatus = (task: Task): 'normal' | 'warning' | 'danger' | 'completed' => {
     if (task.status === 'done') return 'completed';
     if (!task.deadline) return 'normal';
@@ -844,7 +844,7 @@ const updateTaskWithNotification = async (
   isLoading,
   createTask,
   updateTask,
-  updateTaskWithNotification, // ← ДОБАВЬТЕ ЭТО
+  updateTaskWithNotification, // в†ђ Р”РћР‘РђР’Р¬РўР• Р­РўРћ
   deleteTask,
   moveTask,
   getStats,
@@ -856,5 +856,7 @@ const updateTaskWithNotification = async (
   exportTasks,
   getDeadlineStatus,
   loadTasksFromAPI,
-  checkDeadlines // ← ДОБАВЬТЕ ЭТО (опционально, для тестов)
+  checkDeadlines // в†ђ Р”РћР‘РђР’Р¬РўР• Р­РўРћ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ, РґР»СЏ С‚РµСЃС‚РѕРІ)
 };
+
+}

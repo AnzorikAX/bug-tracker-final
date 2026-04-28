@@ -1,8 +1,15 @@
-import jwt from 'jsonwebtoken';
+﻿import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'debug-secret-key-12345';
 const JWT_EXPIRES_IN = '7d';
+
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+  return secret;
+}
 
 export interface AuthUser {
   id: string;
@@ -11,7 +18,11 @@ export interface AuthUser {
   role: 'admin' | 'user';
 }
 
-// 🔥 ДОБАВЛЯЕМ НЕДОСТАЮЩИЙ ТИП
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
 export interface RegisterData {
   email: string;
   name: string;
@@ -20,51 +31,39 @@ export interface RegisterData {
 }
 
 export class AuthService {
-  // Генерация JWT токена
   static generateToken(user: AuthUser): string {
-    console.log('🔐 Generating token for:', user.email);
+    const jwtSecret = getJwtSecret();
+
     return jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
-        name: user.name, 
-        role: user.role 
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
       },
-      JWT_SECRET,
+      jwtSecret,
       { expiresIn: JWT_EXPIRES_IN }
     );
   }
 
-  // Верификация JWT токена
   static verifyToken(token: string): AuthUser | null {
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as AuthUser;
-      console.log('✅ Token verified for:', decoded.email);
-      return decoded;
-    } catch (error) {
-      console.error('❌ Token verification failed:', error);
+      const jwtSecret = getJwtSecret();
+      return jwt.verify(token, jwtSecret) as AuthUser;
+    } catch {
       return null;
     }
   }
 
-  // Хеширование пароля
   static async hashPassword(password: string): Promise<string> {
-    console.log('🔑 Hashing password...');
     const saltRounds = 12;
-    const hash = await bcrypt.hash(password, saltRounds);
-    console.log('✅ Password hashed successfully');
-    return hash;
+    return bcrypt.hash(password, saltRounds);
   }
 
-  // Проверка пароля
   static async verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-    console.log('🔑 Verifying password...');
     try {
-      const isValid = await bcrypt.compare(password, hashedPassword);
-      console.log('✅ Password verification:', isValid ? 'VALID' : 'INVALID');
-      return isValid;
-    } catch (error) {
-      console.error('❌ Password verification error:', error);
+      return await bcrypt.compare(password, hashedPassword);
+    } catch {
       return false;
     }
   }
@@ -73,6 +72,7 @@ export class AuthService {
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return null;
     }
+
     return authHeader.substring(7);
   }
 }

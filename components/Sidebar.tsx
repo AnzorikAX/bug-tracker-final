@@ -28,7 +28,6 @@ export default function Sidebar() {
     if (itemId === 'profile') {
       router.push('/profile');
     }
-    // Для других пунктов меню можно добавить дополнительную логику
   };
 
   const handleLogout = () => {
@@ -38,17 +37,11 @@ export default function Sidebar() {
 
   return (
     <div className="w-64 bg-white h-screen border-r border-gray-200 p-4 flex flex-col">
-      {/* Логотип */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-blue-600">🐛 Bug Tracker</h1>
-        {user && (
-          <p className="text-sm text-gray-600 mt-1">
-            Привет, {user.name}
-          </p>
-        )}
+        {user && <p className="text-sm text-gray-600 mt-1">Привет, {user.name}</p>}
       </div>
 
-      {/* Основное меню */}
       <nav className="mb-8 flex-1">
         <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Меню</h3>
         <ul className="space-y-1">
@@ -70,7 +63,6 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* Проекты */}
       <div className="mb-8">
         <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Проекты</h3>
         <ul className="space-y-1">
@@ -87,22 +79,17 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Пользовательская информация */}
       <div className="mt-auto border-t pt-4">
         <div className="flex items-center space-x-3 mb-3">
           <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
             {user?.name?.charAt(0) || 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">
-              {user?.name || 'Пользователь'}
-            </p>
-            <p className="text-xs text-gray-500 truncate">
-              {user?.role === 'admin' ? 'Администратор' : 'Пользователь'}
-            </p>
+            <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'Пользователь'}</p>
+            <p className="text-xs text-gray-500 truncate">{user?.role === 'admin' ? 'Администратор' : 'Пользователь'}</p>
           </div>
         </div>
-        
+
         <button
           onClick={handleLogout}
           className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors flex items-center"

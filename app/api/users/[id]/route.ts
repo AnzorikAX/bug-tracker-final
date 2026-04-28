@@ -1,22 +1,25 @@
-import { NextRequest } from 'next/server';
+﻿import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
-    console.log('🔍 API: Fetching user:', params.id);
-    
-    const user = await db.get(`
-      SELECT id, email, name, role, createdAt, updatedAt 
-      FROM users 
+    const { id } = await params;
+
+    const user = await db.get(
+      `
+      SELECT id, email, name, role, createdAt, updatedAt
+      FROM users
       WHERE id = ?
-    `, [params.id]);
+    `,
+      [id]
+    );
 
     if (!user) {
       return Response.json(errorResponse('User not found'), { status: 404 });
@@ -24,19 +27,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     return Response.json(successResponse(user));
   } catch (error) {
-    console.error('❌ API: Error fetching user:', error);
+    console.error('API: Error fetching user:', error);
     return Response.json(errorResponse('Failed to fetch user'), { status: 500 });
   }
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    const { id } = await params;
     const updateData = await request.json();
-    console.log('✏️ API: Updating user:', params.id, updateData);
 
-    // Build dynamic update query
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     if (updateData.email !== undefined) {
       fields.push('email = ?');
@@ -55,7 +57,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       values.push(updateData.password);
     }
 
-    // Always update the updatedAt timestamp
     fields.push('updatedAt = ?');
     values.push(new Date().toISOString());
 
@@ -63,34 +64,30 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return Response.json(errorResponse('No fields to update'), { status: 400 });
     }
 
-    values.push(params.id);
+    values.push(id);
 
     const query = `UPDATE users SET ${fields.join(', ')} WHERE id = ?`;
-    await db.run(query, values);
+    await db.run(query, values as string[]);
 
-    console.log('✅ API: User updated successfully:', params.id);
     return Response.json(successResponse(null, 'User updated successfully'));
-  } catch (error: any) {
-    console.error('❌ API: Error updating user:', error);
-    
-    if (error.message && error.message.includes('UNIQUE constraint failed')) {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
       return Response.json(errorResponse('User with this email already exists'), { status: 400 });
     }
-    
+
+    console.error('API: Error updating user:', error);
     return Response.json(errorResponse('Failed to update user'), { status: 500 });
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
-    console.log('🗑️ API: Deleting user:', params.id);
-    
-    await db.run('DELETE FROM users WHERE id = ?', [params.id]);
+    const { id } = await params;
+    await db.run('DELETE FROM users WHERE id = ?', [id]);
 
-    console.log('✅ API: User deleted successfully:', params.id);
     return Response.json(successResponse(null, 'User deleted successfully'));
   } catch (error) {
-    console.error('❌ API: Error deleting user:', error);
+    console.error('API: Error deleting user:', error);
     return Response.json(errorResponse('Failed to delete user'), { status: 500 });
   }
 }

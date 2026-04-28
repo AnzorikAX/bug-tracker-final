@@ -1,23 +1,21 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
-import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import ProtectedRoute from '../../components/ProtectedRoute';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth(); // ← УБРАЛ несуществующие функции
+  const { user, logout } = useAuth();
   const router = useRouter();
-  
+
   const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
-    email: user?.email || '',
-    // ← УБРАЛ avatar которого нет в API
+    email: user?.email || ''
   });
-  const [isLoading, setIsLoading] = useState(false);
 
-  // 🔥 ИСПРАВЛЕНИЕ: Убрал настройки уведомлений которых нет в API
   const [notificationSettings, setNotificationSettings] = useState({
     email: true,
     newTasks: true,
@@ -35,7 +33,6 @@ export default function ProfilePage() {
     setIsLoading(true);
 
     try {
-      // 🔥 ИСПРАВЛЕНИЕ: Временная заглушка - функция updateProfile отсутствует в API
       alert('Редактирование профиля временно недоступно через API');
       setIsEditing(false);
     } catch (error) {
@@ -49,18 +46,17 @@ export default function ProfilePage() {
   const handleCancel = () => {
     setFormData({
       name: user.name,
-      email: user.email,
+      email: user.email
     });
     setIsEditing(false);
   };
 
-  // 🔥 ИСПРАВЛЕНИЕ: Временные обработчики для демонстрации
   const handleNotificationChange = (setting: keyof typeof notificationSettings) => {
     const newSettings = {
       ...notificationSettings,
       [setting]: !notificationSettings[setting]
     };
-    
+
     setNotificationSettings(newSettings);
     alert(`Настройка "${setting}" изменена. В реальном приложении это сохранится в базе.`);
   };
@@ -70,59 +66,58 @@ export default function ProfilePage() {
   };
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(word => word[0]).join('').toUpperCase();
-  };
-
-  // 🔥 ИСПРАВЛЕНИЕ: Форматирование даты с проверкой
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('ru-RU');
-    } catch {
-      return 'неизвестно';
-    }
+    return name
+      .split(' ')
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase();
   };
 
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="max-w-4xl mx-auto px-4">
-          {/* Заголовок */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-800">Мой профиль</h1>
-            <p className="text-gray-600">Управление вашей учетной записью</p>
+          <div className="mb-8 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">Мой профиль</h1>
+              <p className="text-gray-600">Управление вашей учетной записью</p>
+            </div>
+            <button
+              onClick={() => router.push('/')}
+              className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+            >
+              ← Назад
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Боковая панель */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="text-center">
                   <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-3xl font-bold mx-auto mb-4">
                     {getInitials(user.name)}
                   </div>
-                  
+
                   <h2 className="text-xl font-semibold text-gray-800">{user.name}</h2>
                   <p className="text-gray-600">{user.email}</p>
-                  <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mt-2 ${
-                    user.role === 'admin' 
-                      ? 'bg-red-100 text-red-800' 
-                      : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {user.role === 'admin' ? '👑 Администратор' : '👤 Пользователь'}
+                  <div
+                    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mt-2 ${
+                      user.role === 'admin' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                    }`}
+                  >
+                    {user.role === 'admin' ? 'Администратор' : 'Пользователь'}
                   </div>
 
                   <div className="mt-6 space-y-3">
                     <div className="text-sm text-gray-600">
-                      <strong>ID пользователя:</strong><br />
+                      <strong>ID пользователя:</strong>
+                      <br />
                       {user.id}
                     </div>
-                    {/* 🔥 ИСПРАВЛЕНИЕ: Убрал lastLogin которого нет в API */}
                   </div>
                 </div>
               </div>
 
-              {/* Быстрые действия */}
               <div className="mt-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <h3 className="font-medium text-gray-700 mb-3">Действия</h3>
                 <div className="space-y-2">
@@ -130,59 +125,51 @@ export default function ProfilePage() {
                     onClick={() => setIsEditing(!isEditing)}
                     className="w-full text-left px-3 py-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                   >
-                    ✏️ Редактировать профиль
+                    Редактировать профиль
                   </button>
                   <button
                     onClick={() => router.push('/')}
                     className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
                   >
-                    📊 Вернуться к задачам
+                    Вернуться к задачам
                   </button>
                   <button
                     onClick={logout}
                     className="w-full text-left px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                   >
-                    🚪 Выйти из системы
+                    Выйти из системы
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Основное содержимое */}
             <div className="lg:col-span-2">
-              {/* Форма редактирования */}
               {isEditing ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4">Редактирование профиля</h3>
-                  
+
                   <form onSubmit={handleSave} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Полное имя
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Полное имя</label>
                       <input
                         type="text"
                         value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Введите ваше имя"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email адрес
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email адрес</label>
                       <input
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="your@email.com"
                       />
                     </div>
-
-                    {/* 🔥 ИСПРАВЛЕНИЕ: Убрал поле avatar */}
 
                     <div className="flex gap-3 pt-4">
                       <button
@@ -201,20 +188,18 @@ export default function ProfilePage() {
                       </button>
                     </div>
 
-                    {/* 🔥 ИСПРАВЛЕНИЕ: Информационное сообщение */}
                     <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <p className="text-sm text-yellow-800">
-                        ⚠️ Редактирование профиля временно недоступно через API. 
-                        В реальном приложении здесь будет работа с бэкендом.
+                        Редактирование профиля временно недоступно через API. В реальном приложении здесь будет
+                        работа с бэкендом.
                       </p>
                     </div>
                   </form>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Статистика */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Статистика активности</h3>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Статистика активности</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="text-center p-4 bg-blue-50 rounded-lg">
                         <div className="text-2xl font-bold text-blue-600">12</div>
@@ -235,10 +220,9 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Настройки уведомлений (ДЕМО-РЕЖИМ) */}
                   <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                     <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold text-gray-800">🔔 Настройки уведомлений</h3>
+                      <h3 className="text-lg font-semibold text-gray-800">Настройки уведомлений</h3>
                       <button
                         onClick={handleSaveAllNotifications}
                         className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors"
@@ -247,14 +231,13 @@ export default function ProfilePage() {
                       </button>
                     </div>
 
-                    {/* 🔥 ИСПРАВЛЕНИЕ: Демо-сообщение */}
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-800">
-                        💡 Это демонстрация настроек уведомлений. В реальном приложении 
-                        настройки будут сохраняться в базе данных.
+                        Это демонстрация настроек уведомлений. В реальном приложении настройки будут сохраняться в базе
+                        данных.
                       </p>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
@@ -262,9 +245,9 @@ export default function ProfilePage() {
                           <div className="text-sm text-gray-600">Получать уведомления на email</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={notificationSettings.email}
                             onChange={() => handleNotificationChange('email')}
                           />
@@ -278,9 +261,9 @@ export default function ProfilePage() {
                           <div className="text-sm text-gray-600">Уведомления о новых задачах</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={notificationSettings.newTasks}
                             onChange={() => handleNotificationChange('newTasks')}
                           />
@@ -294,9 +277,9 @@ export default function ProfilePage() {
                           <div className="text-sm text-gray-600">Уведомления об изменениях в задачах</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={notificationSettings.taskUpdates}
                             onChange={() => handleNotificationChange('taskUpdates')}
                           />
@@ -310,9 +293,9 @@ export default function ProfilePage() {
                           <div className="text-sm text-gray-600">Уведомления о приближающихся дедлайнах</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={notificationSettings.deadlineReminders}
                             onChange={() => handleNotificationChange('deadlineReminders')}
                           />
@@ -326,9 +309,9 @@ export default function ProfilePage() {
                           <div className="text-sm text-gray-600">Автоматические отчеты о прогрессе</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer" 
+                          <input
+                            type="checkbox"
+                            className="sr-only peer"
                             checked={notificationSettings.weeklyReport}
                             onChange={() => handleNotificationChange('weeklyReport')}
                           />

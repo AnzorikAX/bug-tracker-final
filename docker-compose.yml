@@ -1,0 +1,26 @@
+﻿services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bug-tracker-app
+    ports:
+      - "3000:3000"
+    environment:
+      JWT_SECRET: "change-me-in-production"
+      DB_PATH: "/data/bugtracker.db"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      EMAIL_ENABLED: "false"
+      NEXT_PUBLIC_EMAIL_ENABLED: "false"
+      EMAIL_SMTP_HOST: "smtp.bz"
+      EMAIL_SMTP_PORT: "587"
+      EMAIL_SMTP_SECURE: "false"
+      EMAIL_SMTP_USER: ""
+      EMAIL_SMTP_PASS: ""
+      EMAIL_FROM: "\"Bug Tracker\" <noreply@your-domain.com>"
+    volumes:
+      - bugtracker_data:/data
+    restart: unless-stopped
+
+volumes:
+  bugtracker_data:

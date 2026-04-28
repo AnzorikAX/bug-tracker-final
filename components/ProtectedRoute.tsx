@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../hooks/useAuth';
 import LoadingSpinner from './LoadingSpinner';
@@ -10,46 +10,30 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, isLoading } = useAuth(); // ← УБРАЛ checkAuth из зависимостей
+  const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
-    // 🔥 ИСПРАВЛЕНИЕ: Проверяем только один раз при монтировании
-    if (!hasChecked && !isLoading) {
-      if (!user) {
-        console.log('🔐 ProtectedRoute: User not authenticated, redirecting to login...');
-        router.push('/auth/login');
-      }
-      setHasChecked(true);
+    if (!isLoading && !user) {
+      router.replace('/auth/login');
     }
-  }, [user, isLoading, hasChecked, router]);
+  }, [isLoading, user, router]);
 
-  // Показываем загрузку во время первоначальной проверки
-  if (isLoading || !hasChecked) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <LoadingSpinner 
-          size="lg" 
-          text="Проверка авторизации..." 
-        />
+        <LoadingSpinner size="lg" text="Проверка авторизации..." />
       </div>
     );
   }
 
-  // Если пользователь авторизован - показываем детей
-  if (user) {
-    console.log('🔐 ProtectedRoute: User authenticated, showing content:', user.email);
-    return <>{children}</>;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <LoadingSpinner size="lg" text="Перенаправление на страницу входа..." />
+      </div>
+    );
   }
 
-  // Если не авторизован - показываем загрузку (будет редирект)
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <LoadingSpinner 
-        size="lg" 
-        text="Перенаправление на страницу входа..." 
-      />
-    </div>
-  );
+  return <>{children}</>;
 }

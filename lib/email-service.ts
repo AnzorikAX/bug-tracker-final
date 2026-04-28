@@ -169,7 +169,7 @@ export async function sendTaskAssignedEmail(
     
     return { 
       success: true, 
-      previewUrl: nodemailer.getTestMessageUrl(info) 
+      previewUrl: nodemailer.getTestMessageUrl(info) || undefined 
     };
     
   } catch (error) {
