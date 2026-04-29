@@ -24,6 +24,7 @@ export type Task = {
   updatedAt: Date;
   createdBy?: string;
   deadline: Date | null;
+  discussionCount?: number;
 };
 
 export function useTasks() {
@@ -127,7 +128,8 @@ useEffect(() => {
             assignee: apiTask.assigneeName || apiTask.assignee || 'РќРµ РЅР°Р·РЅР°С‡РµРЅ',
             createdAt: new Date(apiTask.createdAt),
             updatedAt: new Date(apiTask.updatedAt),
-            deadline: apiTask.dueDate ? new Date(apiTask.dueDate) : null
+            deadline: apiTask.dueDate ? new Date(apiTask.dueDate) : null,
+            discussionCount: Number(apiTask.discussionCount || 0),
           };
         });
 
@@ -729,8 +731,22 @@ const updateTaskWithNotification = async (
   };
 
   // вњ… Р—Р°РґР°С‡Рё РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
-  const getUserTasks = (userId: string) => {
-    return tasks.filter((t) => t.createdBy === userId || t.assignee === String(userId));
+  const getUserTasks = (userId: string, userName?: string, userEmail?: string) => {
+    const normalize = (value?: string | null) => (value || '').trim().toLowerCase();
+    const normalizedId = normalize(userId);
+    const normalizedName = normalize(userName);
+    const normalizedEmail = normalize(userEmail);
+
+    return tasks.filter((task) => {
+      const assignee = normalize(task.assignee);
+
+      if (task.createdBy === userId) return true;
+      if (assignee && assignee === normalizedId) return true;
+      if (assignee && normalizedName && assignee === normalizedName) return true;
+      if (assignee && normalizedEmail && assignee === normalizedEmail) return true;
+
+      return false;
+    });
   };
 
   // вњ… РЎС‚Р°С‚РёСЃС‚РёРєР° РєРѕРЅРєСЂРµС‚РЅРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ

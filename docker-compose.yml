@@ -22,5 +22,38 @@
       - bugtracker_data:/data
     restart: unless-stopped
 
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: bug-tracker-app-dev
+    working_dir: /app
+    ports:
+      - "3002:3000"
+    environment:
+      JWT_SECRET: "change-me-in-production"
+      DB_PATH: "/data/bugtracker.db"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3002"
+      EMAIL_ENABLED: "false"
+      NEXT_PUBLIC_EMAIL_ENABLED: "false"
+      EMAIL_SMTP_HOST: "smtp.bz"
+      EMAIL_SMTP_PORT: "587"
+      EMAIL_SMTP_SECURE: "false"
+      EMAIL_SMTP_USER: ""
+      EMAIL_SMTP_PASS: ""
+      EMAIL_FROM: "\"Bug Tracker\" <noreply@your-domain.com>"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      WATCHPACK_POLLING_INTERVAL: "500"
+    volumes:
+      - ./:/app
+      - app_dev_node_modules:/app/node_modules
+      - bugtracker_data:/data
+    command: npm run dev -- --hostname 0.0.0.0 --port 3000
+    restart: unless-stopped
+
 volumes:
   bugtracker_data:
+  app_dev_node_modules:
+
+

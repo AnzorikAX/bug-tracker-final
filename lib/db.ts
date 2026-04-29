@@ -25,12 +25,15 @@ class Database {
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
+        avatar TEXT,
         password TEXT NOT NULL,
         role TEXT DEFAULT 'user',
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    await this.ensureUsersAvatarColumn();
 
     await this.run(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -60,6 +63,14 @@ class Database {
     `);
 
     await this.insertDemoData();
+  }
+
+  private async ensureUsersAvatarColumn() {
+    const columns = await this.all<{ name: string }>('PRAGMA table_info(users)');
+    const hasAvatar = columns.some((column) => column.name === 'avatar');
+    if (!hasAvatar) {
+      await this.run('ALTER TABLE users ADD COLUMN avatar TEXT');
+    }
   }
 
   private async insertDemoData() {

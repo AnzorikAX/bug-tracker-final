@@ -3,11 +3,14 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useTasks } from '../hooks/useTasks';
 
 export default function Sidebar() {
   const [activeView, setActiveView] = useState('dashboard');
   const { user, logout } = useAuth();
+  const { getUserTasks } = useTasks();
   const router = useRouter();
+  const myTasksCount = user ? getUserTasks(user.id, user.name, user.email).length : 0;
 
   const menuItems = [
     { id: 'dashboard', label: 'Дашборд', icon: '📊' },
@@ -57,6 +60,11 @@ export default function Sidebar() {
               >
                 <span className="mr-2">{item.icon}</span>
                 {item.label}
+                {item.id === 'my' && (
+                  <span className="ml-2 inline-flex min-w-5 justify-center rounded-full bg-blue-100 px-1.5 py-0.5 text-xs font-semibold text-blue-700">
+                    {myTasksCount}
+                  </span>
+                )}
               </button>
             </li>
           ))}

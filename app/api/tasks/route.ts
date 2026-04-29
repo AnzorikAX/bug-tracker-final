@@ -15,6 +15,7 @@ type DbTask = {
   tags: string | null;
   createdAt: string;
   updatedAt: string;
+  discussionCount: number;
 };
 
 export async function GET(request: NextRequest) {
@@ -27,10 +28,17 @@ export async function GET(request: NextRequest) {
       SELECT
         t.*,
         u1.name as assigneeName,
-        u2.name as reporterName
+        u2.name as reporterName,
+        COALESCE(tm.userMessageCount, 0) as discussionCount
       FROM tasks t
       LEFT JOIN users u1 ON t.assignee = u1.id
       LEFT JOIN users u2 ON t.reporter = u2.id
+      LEFT JOIN (
+        SELECT taskId, COUNT(*) as userMessageCount
+        FROM task_messages
+        WHERE kind = 'user'
+        GROUP BY taskId
+      ) tm ON tm.taskId = t.id
     `;
     const params: string[] = [];
 

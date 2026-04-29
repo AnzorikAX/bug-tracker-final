@@ -36,6 +36,19 @@ type ApiMessage = {
   createdAt: string;
 };
 
+const hasCorruptedText = (text: string) => /\?{3,}/.test(text);
+
+const normalizeSystemBody = (body: string, task: Task): string => {
+  if (!hasCorruptedText(body)) return body;
+  if (body.includes('назначен(а) исполнителем')) {
+    return `${task.assignee} назначен(а) исполнителем`;
+  }
+  if (body.includes('Задача создана')) {
+    return `Задача создана: «${task.title}»`;
+  }
+  return `Системное событие по задаче «${task.title}»`;
+};
+
 const statuses: BoardStatus[] = [
   { id: 'todo', title: 'К выполнению', icon: '📋', color: 'bg-slate-100' },
   { id: 'inprogress', title: 'В работе', icon: '🚀', color: 'bg-blue-100' },
@@ -108,9 +121,14 @@ export default function TaskBoard() {
   });
 
   const baseTasks = useMemo(() => {
-    if (taskFilter === 'my' && user) return getUserTasks(user.id);
+    if (taskFilter === 'my' && user) return getUserTasks(user.id, user.name, user.email);
     return tasks;
   }, [taskFilter, user, getUserTasks, tasks]);
+
+  const myTasksCount = useMemo(() => {
+    if (!user) return 0;
+    return getUserTasks(user.id, user.name, user.email).length;
+  }, [getUserTasks, user]);
 
   const filteredTasks = useMemo(() => {
     return getFilteredTasks({ query: searchQuery, ...filters }, baseTasks);
@@ -123,6 +141,12 @@ export default function TaskBoard() {
 
   const selectedChat = selectedTask ? taskChats[selectedTask.id] ?? [] : [];
   const getApiTaskId = (taskId: number) => `task-${taskId}`;
+  const getDiscussionCount = (task: Task) => {
+    const fromApi = task.discussionCount ?? 0;
+    const messages = taskChats[task.id] ?? [];
+    const localUserMessages = messages.filter((msg) => msg.kind === 'user').length;
+    return Math.max(fromApi, localUserMessages);
+  };
 
   const ensureChatThread = (task: Task) => {
     setTaskChats((prev) => {
@@ -172,7 +196,7 @@ export default function TaskBoard() {
           id: `api-${msg.id}`,
           taskId: selectedTask.id,
           author: msg.author,
-          body: msg.body,
+          body: msg.kind === 'system' ? normalizeSystemBody(msg.body, selectedTask) : msg.body,
           kind: msg.kind,
           createdAt: new Date(msg.createdAt).toLocaleString('ru-RU'),
         }));
@@ -392,7 +416,7 @@ export default function TaskBoard() {
               onClick={() => setTaskFilter('my')}
               className={`px-4 py-2 rounded-lg text-sm ${taskFilter === 'my' ? 'bg-white shadow text-slate-900' : 'text-slate-600'}`}
             >
-              Мои задачи
+              Мои задачи ({myTasksCount})
             </button>
           </div>
 
@@ -426,6 +450,8 @@ export default function TaskBoard() {
               <div className="space-y-3">
                 {columnTasks.map((task) => {
                   const unread = unreadByTask[task.id] ?? 0;
+                  const discussionCount = getDiscussionCount(task);
+                  const hasDiscussion = discussionCount > 0;
                   return (
                     <div
                       key={task.id}
@@ -435,10 +461,20 @@ export default function TaskBoard() {
                       className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-3 mb-2">
-                        <h4 className="font-semibold text-slate-900 leading-snug">{task.title}</h4>
-                        {unread > 0 && (
-                          <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">{unread}</span>
-                        )}
+                        <div className="min-w-0">
+                          <h4 className="font-semibold text-slate-900 leading-snug">{task.title}</h4>
+                          {hasDiscussion && (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                              <span>💬</span>
+                              <span>Чат активен: {discussionCount}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {unread > 0 && (
+                            <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full">{unread}</span>
+                          )}
+                        </div>
                       </div>
 
                       <p className="text-sm text-slate-600 mb-3 line-clamp-2">{task.description || 'Без описания'}</p>
@@ -558,6 +594,12 @@ export default function TaskBoard() {
               <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
                 placeholder="Напишите сообщение по задаче..."
                 rows={2}
                 className="flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
